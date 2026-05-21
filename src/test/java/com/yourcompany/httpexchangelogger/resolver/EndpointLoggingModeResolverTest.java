@@ -1,0 +1,67 @@
+package com.yourcompany.httpexchangelogger.resolver;
+
+import com.yourcompany.httpexchangelogger.autoconfigure.HttpExchangeLoggerProperties;
+import com.yourcompany.httpexchangelogger.model.HttpLogMode;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class EndpointLoggingModeResolverTest {
+
+    private EndpointLoggingModeResolver resolverWithRules(HttpLogMode defaultMode,
+                                                         List<HttpExchangeLoggerProperties.Endpoint> endpoints) {
+        HttpExchangeLoggerProperties properties = new HttpExchangeLoggerProperties();
+        properties.setDefaultMode(defaultMode);
+        properties.setEndpoints(endpoints);
+        return new EndpointLoggingModeResolver(properties);
+    }
+
+    private HttpExchangeLoggerProperties.Endpoint rule(String pattern, HttpLogMode mode) {
+        HttpExchangeLoggerProperties.Endpoint endpoint = new HttpExchangeLoggerProperties.Endpoint();
+        endpoint.setPattern(pattern);
+        endpoint.setMode(mode);
+        return endpoint;
+    }
+
+    @Test
+    void usesDefaultModeWhenNoRulesMatch() {
+        EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, new ArrayList<>());
+
+        assertThat(resolver.resolve("/api/anything")).isEqualTo(HttpLogMode.BASIC);
+    }
+
+    @Test
+    void firstMatchingRuleWins() {
+        EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
+                rule("/api/orders/**", HttpLogMode.FULL),
+                rule("/api/**", HttpLogMode.LIMITED)
+        ));
+
+        assertThat(resolver.resolve("/api/orders/123")).isEqualTo(HttpLogMode.FULL);
+        assertThat(resolver.resolve("/api/products")).isEqualTo(HttpLogMode.LIMITED);
+    }
+
+    @Test
+    void offRuleDisablesLogging() {
+        EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.FULL, List.of(
+                rule("/actuator/**", HttpLogMode.OFF)
+        ));
+
+        assertThat(resolver.resolve("/actuator/health")).isEqualTo(HttpLogMode.OFF);
+        assertThat(resolver.resolve("/api/orders")).isEqualTo(HttpLogMode.FULL);
+    }
+
+    @Test
+    void ignoresRulesMissingPatternOrMode() {
+        EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
+                rule(null, HttpLogMode.FULL),
+                rule("/api/**", null),
+                rule("/api/orders/**", HttpLogMode.FULL)
+        ));
+
+        assertThat(resolver.resolve("/api/orders/9")).isEqualTo(HttpLogMode.FULL);
+    }
+}
