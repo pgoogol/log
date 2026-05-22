@@ -19,7 +19,7 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void masksDefaultSensitiveHeadersEvenWhenNotInList() {
+    void sanitize_whenDefaultSensitiveHeadersNotInList_masksThem() {
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of(), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));
@@ -36,7 +36,7 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void caseInsensitiveHeaderMatching() {
+    void sanitize_whenHeaderNamesDifferInCase_matchesCaseInsensitively() {
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-trace"), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("AUTHORIZATION", List.of("Bearer secret"));
@@ -49,7 +49,7 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void masksAllValuesForMultiValueHeaders() {
+    void sanitize_whenMultiValueHeader_masksAllValues() {
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of(), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Set-Cookie", List.of("a=1", "b=2"));
@@ -60,7 +60,7 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void stillMasksBuiltInCredentialHeadersWhenMaskingDisabled() {
+    void sanitize_whenMaskingDisabled_stillMasksBuiltInCredentialHeaders() {
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-custom"), false);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));

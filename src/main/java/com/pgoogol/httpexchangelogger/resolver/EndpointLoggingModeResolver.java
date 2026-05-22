@@ -3,8 +3,12 @@ package com.pgoogol.httpexchangelogger.resolver;
 import com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerProperties;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import jakarta.servlet.http.HttpServletRequest;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.PathMatcher;
+
+import java.util.Objects;
 
 public class EndpointLoggingModeResolver {
 
@@ -20,17 +24,17 @@ public class EndpointLoggingModeResolver {
         this.pathMatcher = pathMatcher;
     }
 
-    public HttpLogMode resolve(HttpServletRequest request) {
+    public @NonNull HttpLogMode resolve(@NonNull HttpServletRequest request) {
         return resolve(request.getRequestURI());
     }
 
-    public HttpLogMode resolve(String path) {
-        if (path == null) {
+    public @NonNull HttpLogMode resolve(@Nullable String path) {
+        if (Objects.isNull(path)) {
             return properties.getDefaultMode();
         }
 
-        for (HttpExchangeLoggerProperties.Endpoint rule : properties.getEndpoints()) {
-            if (rule.getPattern() == null || rule.getMode() == null) {
+        for (var rule : properties.getEndpoints()) {
+            if (Objects.isNull(rule.getPattern()) || Objects.isNull(rule.getMode())) {
                 continue;
             }
             if (pathMatcher.match(rule.getPattern(), path)) {

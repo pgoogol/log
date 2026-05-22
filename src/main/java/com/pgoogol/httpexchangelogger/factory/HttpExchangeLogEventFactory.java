@@ -19,9 +19,11 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class HttpExchangeLogEventFactory {
 
@@ -52,7 +54,7 @@ public class HttpExchangeLogEventFactory {
                                        long durationMs,
                                        Throwable exception) {
 
-        HttpExchangeLogEvent.Builder builder = HttpExchangeLogEvent.builder()
+        var builder = HttpExchangeLogEvent.builder()
                 .requestId(requestId)
                 .method(request.getMethod())
                 .path(request.getRequestURI())
@@ -64,30 +66,35 @@ public class HttpExchangeLogEventFactory {
         if (properties.getInclude().isQueryString()) {
             builder.queryString(request.getQueryString());
         }
+        applyException(builder, exception);
 
-        if (exception != null) {
-            Throwable root = unwrap(exception);
-            builder.exceptionClass(root.getClass().getName());
-            builder.exceptionMessage(root.getMessage());
+        if (mode != HttpLogMode.BASIC && mode != HttpLogMode.OFF) {
+            applyDetails(request, response, builder);
         }
+        return builder.build();
+    }
 
-        if (mode == HttpLogMode.BASIC || mode == HttpLogMode.OFF) {
-            return builder.build();
+    private void applyException(HttpExchangeLogEvent.Builder builder, Throwable exception) {
+        if (Objects.isNull(exception)) {
+            return;
         }
+        var root = unwrap(exception);
+        builder.exceptionClass(root.getClass().getName());
+        builder.exceptionMessage(root.getMessage());
+    }
 
-        if (properties.getInclude().isClientIp() && clientIpExtractor != null) {
+    private void applyDetails(ContentCachingRequestWrapper request,
+                              ContentCachingResponseWrapper response,
+                              HttpExchangeLogEvent.Builder builder) {
+        if (properties.getInclude().isClientIp() && Objects.nonNull(clientIpExtractor)) {
             builder.clientIp(clientIpExtractor.extract(request));
         }
-
         if (properties.getInclude().isHeaders()) {
             builder.requestHeaders(sanitizeHeaders(extractRequestHeaders(request)));
             builder.responseHeaders(sanitizeHeaders(extractResponseHeaders(response)));
         }
-
         applyRequestBody(request, builder);
         applyResponseBody(response, builder);
-
-        return builder.build();
     }
 
     private int resolveStatus(ContentCachingResponseWrapper response, Throwable exception) {
@@ -101,9 +108,8 @@ public class HttpExchangeLogEventFactory {
     }
 
     private void applyRequestBody(ContentCachingRequestWrapper request, HttpExchangeLogEvent.Builder builder) {
-        String contentType = request.getContentType();
-        BodyResult result = buildBody(BodyExtractor.extractRequestBody(request), contentType);
-        if (result == null) {
+        var result = buildBody(BodyExtractor.extractRequestBody(request), request.getContentType());
+        if (Objects.isNull(result)) {
             return;
         }
         builder.requestBody(result.value());
@@ -111,9 +117,8 @@ public class HttpExchangeLogEventFactory {
     }
 
     private void applyResponseBody(ContentCachingResponseWrapper response, HttpExchangeLogEvent.Builder builder) {
-        String contentType = response.getContentType();
-        BodyResult result = buildBody(BodyExtractor.extractResponseBody(response), contentType);
-        if (result == null) {
+        var result = buildBody(BodyExtractor.extractResponseBody(response), response.getContentType());
+        if (Objects.isNull(result)) {
             return;
         }
         builder.responseBody(result.value());
@@ -137,10 +142,9 @@ public class HttpExchangeLogEventFactory {
 
         // Mask FIRST on the full body; truncation afterwards can never expose a secret
         // because sensitive values are already replaced.
-        String sanitized = bodySanitizer.sanitize(body, contentType);
+        var sanitized = bodySanitizer.sanitize(body, contentType);
 
-        BodyTruncator.TruncationResult truncated =
-                BodyTruncator.truncate(sanitized, properties.getMaxBodyLength());
+        var truncated = BodyTruncator.truncate(sanitized, properties.getMaxBodyLength());
         if (truncated.isTruncated()) {
             return new BodyResult(truncated.getValue(), true);
         }
@@ -149,7 +153,7 @@ public class HttpExchangeLogEventFactory {
     }
 
     private Object asJsonOrString(String value, String contentType) {
-        if (objectMapper != null && ContentTypeMatcher.isJson(contentType)) {
+        if (Objects.nonNull(objectMapper) && ContentTypeMatcher.isJson(contentType)) {
             try {
                 return objectMapper.readTree(value);
             } catch (Exception ex) {
@@ -164,16 +168,16 @@ public class HttpExchangeLogEventFactory {
     }
 
     private Map<String, List<String>> extractRequestHeaders(HttpServletRequest request) {
-        Map<String, List<String>> headers = new LinkedHashMap<>();
-        java.util.Enumeration<String> names = request.getHeaderNames();
-        if (names == null) {
+        var headers = new LinkedHashMap<String, List<String>>();
+        Enumeration<String> names = request.getHeaderNames();
+        if (Objects.isNull(names)) {
             return Collections.emptyMap();
         }
         while (names.hasMoreElements()) {
-            String name = names.nextElement();
-            java.util.Enumeration<String> values = request.getHeaders(name);
-            List<String> list = new ArrayList<>();
-            if (values != null) {
+            var name = names.nextElement();
+            Enumeration<String> values = request.getHeaders(name);
+            var list = new ArrayList<String>();
+            if (Objects.nonNull(values)) {
                 while (values.hasMoreElements()) {
                     list.add(values.nextElement());
                 }
@@ -184,20 +188,20 @@ public class HttpExchangeLogEventFactory {
     }
 
     private Map<String, List<String>> extractResponseHeaders(HttpServletResponse response) {
-        Map<String, List<String>> headers = new LinkedHashMap<>();
+        var headers = new LinkedHashMap<String, List<String>>();
         Collection<String> names = response.getHeaderNames();
-        if (names == null) {
+        if (Objects.isNull(names)) {
             return Collections.emptyMap();
         }
-        for (String name : names) {
-            Collection<String> values = response.getHeaders(name);
-            headers.put(name, values == null ? Collections.emptyList() : new ArrayList<>(values));
+        for (var name : names) {
+            var values = response.getHeaders(name);
+            headers.put(name, new ArrayList<>(Objects.requireNonNullElse(values, Collections.emptyList())));
         }
         return headers;
     }
 
     private Map<String, List<String>> sanitizeHeaders(Map<String, List<String>> headers) {
-        if (headerSanitizer == null) {
+        if (Objects.isNull(headerSanitizer)) {
             return headers;
         }
         return headerSanitizer.sanitize(headers);

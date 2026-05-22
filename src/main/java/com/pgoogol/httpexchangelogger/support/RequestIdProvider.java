@@ -2,8 +2,10 @@ package com.pgoogol.httpexchangelogger.support;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.NonNull;
 
 public interface RequestIdProvider {
 
-    String getOrCreateRequestId(HttpServletRequest request, HttpServletResponse response);
+    @NonNull
+    String getOrCreateRequestId(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response);
 }

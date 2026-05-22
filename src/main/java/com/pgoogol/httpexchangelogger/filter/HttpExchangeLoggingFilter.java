@@ -11,6 +11,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,6 +20,7 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
@@ -53,33 +56,31 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         return !properties.isEnabled();
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        HttpLogMode mode = modeResolver.resolve(request);
+        var mode = modeResolver.resolve(request);
 
         // Correlation id is established for every request the filter sees (including OFF),
         // so downstream consumers always get an X-Request-Id.
-        String requestId = requestIdProvider.getOrCreateRequestId(request, response);
+        var requestId = requestIdProvider.getOrCreateRequestId(request, response);
 
         if (mode == HttpLogMode.OFF) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        ContentCachingRequestWrapper wrappedRequest =
+        var wrappedRequest =
                 new ContentCachingRequestWrapper(request, resolveCacheLimit(properties.getMaxBodyLength()));
+        var wrappedResponse = new ContentCachingResponseWrapper(response);
 
-        ContentCachingResponseWrapper wrappedResponse =
-                new ContentCachingResponseWrapper(response);
-
-        long startedAt = System.nanoTime();
+        var startedAt = System.nanoTime();
         Throwable exception = null;
 
         try {
@@ -88,16 +89,9 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             exception = ex;
             throw ex;
         } finally {
-            long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
+            var durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
-                HttpExchangeLogEvent event = eventFactory.create(
-                        wrappedRequest,
-                        wrappedResponse,
-                        mode,
-                        requestId,
-                        durationMs,
-                        exception
-                );
+                var event = eventFactory.create(wrappedRequest, wrappedResponse, mode, requestId, durationMs, exception);
                 sink.log(event);
             } catch (RuntimeException loggingException) {
                 LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
@@ -107,13 +101,13 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         }
     }
 
-    private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, Throwable inFlight)
+    private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, @Nullable Throwable inFlight)
             throws IOException {
         try {
             wrappedResponse.copyBodyToResponse();
         } catch (IOException copyException) {
             // Never let a copy failure mask the exception that is already propagating.
-            if (inFlight != null) {
+            if (Objects.nonNull(inFlight)) {
                 inFlight.addSuppressed(copyException);
             } else {
                 throw copyException;

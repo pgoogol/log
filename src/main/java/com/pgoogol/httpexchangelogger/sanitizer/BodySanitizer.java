@@ -1,6 +1,9 @@
 package com.pgoogol.httpexchangelogger.sanitizer;
 
+import org.jspecify.annotations.Nullable;
+
 public interface BodySanitizer {
 
-    String sanitize(String body, String contentType);
+    @Nullable
+    String sanitize(@Nullable String body, @Nullable String contentType);
 }

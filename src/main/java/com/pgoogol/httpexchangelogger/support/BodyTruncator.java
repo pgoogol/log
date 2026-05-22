@@ -1,12 +1,16 @@
 package com.pgoogol.httpexchangelogger.support;
 
+import org.jspecify.annotations.Nullable;
+
+import java.util.Objects;
+
 public final class BodyTruncator {
 
     private BodyTruncator() {
     }
 
-    public static TruncationResult truncate(String body, int maxLength) {
-        if (body == null) {
+    public static TruncationResult truncate(@Nullable String body, int maxLength) {
+        if (Objects.isNull(body)) {
             return new TruncationResult(null, false);
         }
         if (maxLength <= 0) {
@@ -19,15 +23,15 @@ public final class BodyTruncator {
     }
 
     public static final class TruncationResult {
-        private final String value;
+        private final @Nullable String value;
         private final boolean truncated;
 
-        public TruncationResult(String value, boolean truncated) {
+        public TruncationResult(@Nullable String value, boolean truncated) {
             this.value = value;
             this.truncated = truncated;
         }
 
-        public String getValue() {
+        public @Nullable String getValue() {
             return value;
         }
 

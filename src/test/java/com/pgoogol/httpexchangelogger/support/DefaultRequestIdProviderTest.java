@@ -13,7 +13,7 @@ class DefaultRequestIdProviderTest {
     private final DefaultRequestIdProvider provider = new DefaultRequestIdProvider();
 
     @Test
-    void usesIncomingHeaderWhenPresent() {
+    void getOrCreateRequestId_whenIncomingHeaderPresent_usesIt() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Request-Id", "external-id");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -25,7 +25,7 @@ class DefaultRequestIdProviderTest {
     }
 
     @Test
-    void generatesUuidWhenHeaderMissing() {
+    void getOrCreateRequestId_whenHeaderMissing_generatesUuid() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -37,7 +37,7 @@ class DefaultRequestIdProviderTest {
     }
 
     @Test
-    void preservesAlreadySetResponseHeader() {
+    void getOrCreateRequestId_whenResponseHeaderAlreadySet_preservesIt() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         response.setHeader("X-Request-Id", "preset");
@@ -49,7 +49,7 @@ class DefaultRequestIdProviderTest {
     }
 
     @Test
-    void rejectsHeaderWithCrlfInjectionAndGeneratesUuid() {
+    void getOrCreateRequestId_whenHeaderHasCrlfInjection_rejectsItAndGeneratesUuid() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Request-Id", "abc\r\nSet-Cookie: evil=1");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -62,7 +62,7 @@ class DefaultRequestIdProviderTest {
     }
 
     @Test
-    void rejectsOverlongHeader() {
+    void getOrCreateRequestId_whenHeaderIsOverlong_rejectsItAndGeneratesUuid() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Request-Id", "a".repeat(5000));
         MockHttpServletResponse response = new MockHttpServletResponse();

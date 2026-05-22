@@ -1,8 +1,11 @@
 package com.pgoogol.httpexchangelogger.sanitizer;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 public class SensitiveValueMasker {
@@ -11,26 +14,26 @@ public class SensitiveValueMasker {
 
     private final Set<String> normalizedFields;
 
-    public SensitiveValueMasker(List<String> fields) {
+    public SensitiveValueMasker(@Nullable List<String> fields) {
         this.normalizedFields = new HashSet<>();
-        if (fields != null) {
-            for (String field : fields) {
-                if (field != null) {
+        if (Objects.nonNull(fields)) {
+            for (var field : fields) {
+                if (Objects.nonNull(field)) {
                     normalizedFields.add(normalize(field));
                 }
             }
         }
     }
 
-    public boolean isSensitive(String name) {
-        if (name == null) {
+    public boolean isSensitive(@Nullable String name) {
+        if (Objects.isNull(name)) {
             return false;
         }
         return normalizedFields.contains(normalize(name));
     }
 
-    public String mask(String value) {
-        if (value == null) {
+    public @Nullable String mask(@Nullable String value) {
+        if (Objects.isNull(value)) {
             return null;
         }
         return MASK;
