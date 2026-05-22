@@ -2,11 +2,8 @@ package com.pgoogol.httpexchangelogger.sink;
 
 import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
-import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Objects;
 
 public class ConsoleHttpExchangeLogSink implements HttpExchangeLogSink {
 
@@ -25,14 +22,14 @@ public class ConsoleHttpExchangeLogSink implements HttpExchangeLogSink {
     }
 
     @Override
-    public void log(@NonNull HttpExchangeLogEvent event) {
-        if (Objects.isNull(event)) {
+    public void log(HttpExchangeLogEvent event) {
+        if (event == null) {
             return;
         }
         if (!logger.isInfoEnabled()) {
             return;
         }
-        var json = jsonWriter.write(event);
+        String json = jsonWriter.write(event);
         logger.info(json);
     }
 }

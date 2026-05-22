@@ -1,43 +1,40 @@
 package com.pgoogol.httpexchangelogger.support;
 
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 
 public final class BodyExtractor {
 
     private BodyExtractor() {
     }
 
-    public static @Nullable String extractRequestBody(@NonNull ContentCachingRequestWrapper request) {
-        if (Objects.isNull(request)) {
+    public static String extractRequestBody(ContentCachingRequestWrapper request) {
+        if (request == null) {
             return null;
         }
-        var content = request.getContentAsByteArray();
-        if (Objects.isNull(content) || content.length == 0) {
+        byte[] content = request.getContentAsByteArray();
+        if (content == null || content.length == 0) {
             return null;
         }
         return new String(content, resolveCharset(request.getCharacterEncoding()));
     }
 
-    public static @Nullable String extractResponseBody(@NonNull ContentCachingResponseWrapper response) {
-        if (Objects.isNull(response)) {
+    public static String extractResponseBody(ContentCachingResponseWrapper response) {
+        if (response == null) {
             return null;
         }
-        var content = response.getContentAsByteArray();
-        if (Objects.isNull(content) || content.length == 0) {
+        byte[] content = response.getContentAsByteArray();
+        if (content == null || content.length == 0) {
             return null;
         }
         return new String(content, resolveCharset(response.getCharacterEncoding()));
     }
 
-    private static Charset resolveCharset(@Nullable String encoding) {
-        if (Objects.isNull(encoding) || encoding.isBlank()) {
+    private static Charset resolveCharset(String encoding) {
+        if (encoding == null || encoding.isBlank()) {
             return StandardCharsets.UTF_8;
         }
         try {

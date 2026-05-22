@@ -27,14 +27,14 @@ class EndpointLoggingModeResolverTest {
     }
 
     @Test
-    void resolve_whenNoRulesMatch_usesDefaultMode() {
+    void usesDefaultModeWhenNoRulesMatch() {
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, new ArrayList<>());
 
         assertThat(resolver.resolve("/api/anything")).isEqualTo(HttpLogMode.BASIC);
     }
 
     @Test
-    void resolve_whenMultipleRulesMatch_usesFirstMatchingRule() {
+    void firstMatchingRuleWins() {
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
                 rule("/api/orders/**", HttpLogMode.FULL),
                 rule("/api/**", HttpLogMode.LIMITED)
@@ -45,7 +45,7 @@ class EndpointLoggingModeResolverTest {
     }
 
     @Test
-    void resolve_whenOffRuleMatches_returnsOffMode() {
+    void offRuleDisablesLogging() {
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.FULL, List.of(
                 rule("/actuator/**", HttpLogMode.OFF)
         ));
@@ -55,7 +55,7 @@ class EndpointLoggingModeResolverTest {
     }
 
     @Test
-    void resolve_whenRulesMissingPatternOrMode_ignoresThoseRules() {
+    void ignoresRulesMissingPatternOrMode() {
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
                 rule(null, HttpLogMode.FULL),
                 rule("/api/**", null),

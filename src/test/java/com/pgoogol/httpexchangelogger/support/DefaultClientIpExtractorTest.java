@@ -10,7 +10,7 @@ class DefaultClientIpExtractorTest {
     private final DefaultClientIpExtractor extractor = new DefaultClientIpExtractor();
 
     @Test
-    void extract_whenXForwardedForPresent_returnsFirstAddress() {
+    void prefersFirstAddressFromXForwardedFor() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Forwarded-For", "10.0.0.1, 10.0.0.2");
         request.setRemoteAddr("127.0.0.1");
@@ -19,7 +19,7 @@ class DefaultClientIpExtractorTest {
     }
 
     @Test
-    void extract_whenOnlyXRealIpPresent_returnsXRealIp() {
+    void fallsBackToXRealIp() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Real-IP", "192.168.0.1");
         request.setRemoteAddr("127.0.0.1");
@@ -28,7 +28,7 @@ class DefaultClientIpExtractorTest {
     }
 
     @Test
-    void extract_whenNoHeaders_fallsBackToRemoteAddr() {
+    void fallsBackToRemoteAddrWhenNoHeaders() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("127.0.0.1");
 
@@ -36,7 +36,7 @@ class DefaultClientIpExtractorTest {
     }
 
     @Test
-    void extract_whenLeadingTokenIsUnknown_skipsIt() {
+    void skipsUnknownToken() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Forwarded-For", "unknown, 203.0.113.7");
         request.setRemoteAddr("127.0.0.1");
@@ -45,7 +45,7 @@ class DefaultClientIpExtractorTest {
     }
 
     @Test
-    void extract_whenLeadingSegmentIsEmpty_skipsIt() {
+    void skipsEmptyLeadingSegment() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Forwarded-For", ", 203.0.113.7");
         request.setRemoteAddr("127.0.0.1");
@@ -54,7 +54,7 @@ class DefaultClientIpExtractorTest {
     }
 
     @Test
-    void extract_whenForwardedForHasOnlyUnknown_fallsBackToRemoteAddr() {
+    void fallsBackWhenForwardedForHasOnlyUnknown() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Forwarded-For", "unknown");
         request.setRemoteAddr("127.0.0.1");

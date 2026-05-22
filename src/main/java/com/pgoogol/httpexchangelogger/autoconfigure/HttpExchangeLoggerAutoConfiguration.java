@@ -30,6 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
+import java.util.List;
 
 @AutoConfiguration
 @EnableConfigurationProperties(HttpExchangeLoggerProperties.class)
@@ -101,7 +102,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     @ConditionalOnMissingBean(name = "httpExchangeLogSink")
     public HttpExchangeLogSink httpExchangeLogSink(HttpExchangeLoggerProperties properties,
                                                    HttpExchangeLogEventJsonWriter jsonWriter) {
-        var sinks = new ArrayList<HttpExchangeLogSink>();
+        List<HttpExchangeLogSink> sinks = new ArrayList<>();
         if (properties.getSink().isConsole()) {
             sinks.add(new ConsoleHttpExchangeLogSink(jsonWriter));
         }
@@ -129,7 +130,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     public FilterRegistrationBean<HttpExchangeLoggingFilter> httpExchangeLoggingFilterRegistration(
             HttpExchangeLoggingFilter filter,
             HttpExchangeLoggerProperties properties) {
-        var registration = new FilterRegistrationBean<>(filter);
+        FilterRegistrationBean<HttpExchangeLoggingFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setName("httpExchangeLoggingFilter");
         registration.addUrlPatterns("/*");
         registration.setOrder(properties.getFilterOrder());

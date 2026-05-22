@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SensitiveValueMaskerTest {
 
     @Test
-    void isSensitive_whenFieldNamesDifferInCase_matchesCaseInsensitively() {
+    void detectsCaseInsensitiveMatches() {
         SensitiveValueMasker masker = new SensitiveValueMasker(List.of("password", "Token"));
 
         assertThat(masker.isSensitive("password")).isTrue();
@@ -20,7 +20,7 @@ class SensitiveValueMaskerTest {
     }
 
     @Test
-    void mask_whenValueIsNonNull_returnsMask() {
+    void returnsMaskForNonNullValues() {
         SensitiveValueMasker masker = new SensitiveValueMasker(List.of("password"));
 
         assertThat(masker.mask("secret")).isEqualTo("***");
@@ -28,7 +28,7 @@ class SensitiveValueMaskerTest {
     }
 
     @Test
-    void isSensitive_whenFieldsListIsNull_returnsFalse() {
+    void handlesNullFieldsList() {
         SensitiveValueMasker masker = new SensitiveValueMasker(null);
 
         assertThat(masker.isSensitive("password")).isFalse();

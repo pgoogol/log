@@ -13,7 +13,7 @@ class HttpExchangeLoggerPropertiesTest {
             .withConfiguration(AutoConfigurations.of(HttpExchangeLoggerAutoConfiguration.class));
 
     @Test
-    void properties_whenNoOverrides_haveReasonableDefaults() {
+    void hasReasonableDefaults() {
         runner.run(ctx -> {
             HttpExchangeLoggerProperties props = ctx.getBean(HttpExchangeLoggerProperties.class);
             assertThat(props.isEnabled()).isTrue();
@@ -34,7 +34,7 @@ class HttpExchangeLoggerPropertiesTest {
     }
 
     @Test
-    void properties_whenPropertyValuesProvided_bindsConfiguration() {
+    void bindsYamlConfiguration() {
         runner.withPropertyValues(
                 "http-exchange-logger.enabled=true",
                 "http-exchange-logger.default-mode=LIMITED",

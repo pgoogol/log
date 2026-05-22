@@ -2,9 +2,7 @@ package com.pgoogol.httpexchangelogger.support;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.jspecify.annotations.NonNull;
 
-import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -20,22 +18,21 @@ public class DefaultRequestIdProvider implements RequestIdProvider {
     private static final Pattern SAFE_ID = Pattern.compile("[\\x21-\\x7E]{1,200}");
 
     @Override
-    public @NonNull String getOrCreateRequestId(@NonNull HttpServletRequest request,
-                                                @NonNull HttpServletResponse response) {
+    public String getOrCreateRequestId(HttpServletRequest request, HttpServletResponse response) {
         String requestId = null;
-        if (Objects.nonNull(request)) {
-            var existing = request.getHeader(HEADER);
-            if (Objects.nonNull(existing)) {
-                var trimmed = existing.trim();
+        if (request != null) {
+            String existing = request.getHeader(HEADER);
+            if (existing != null) {
+                String trimmed = existing.trim();
                 if (isSafe(trimmed)) {
                     requestId = trimmed;
                 }
             }
         }
-        if (Objects.isNull(requestId)) {
+        if (requestId == null) {
             requestId = UUID.randomUUID().toString();
         }
-        if (Objects.nonNull(response) && Objects.isNull(response.getHeader(HEADER))) {
+        if (response != null && response.getHeader(HEADER) == null) {
             response.setHeader(HEADER, requestId);
         }
         return requestId;

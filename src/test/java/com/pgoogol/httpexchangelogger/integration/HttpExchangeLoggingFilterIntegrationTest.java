@@ -69,7 +69,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenBasicMode_logsOnlyMetadata() throws Exception {
+    void basicModeOnlyLogsMetadata() throws Exception {
         MvcResult result = mockMvc().perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"password\":\"secret\"}"))
@@ -91,7 +91,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenOffMode_skipsLogging() throws Exception {
+    void offModeSkipsLogging() throws Exception {
         mockMvc().perform(get("/actuator/health"))
                 .andExpect(status().isOk());
 
@@ -99,7 +99,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenOffMode_stillSetsRequestIdHeader() throws Exception {
+    void offModeStillSetsRequestIdHeader() throws Exception {
         MvcResult result = mockMvc().perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -109,7 +109,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenFullMode_includesBodiesAndMasksSensitiveFields() throws Exception {
+    void fullModeIncludesBodiesAndMasksSensitiveFields() throws Exception {
         MvcResult result = mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer my-token")
@@ -132,7 +132,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenBodyTruncated_doesNotLeakSecrets() throws Exception {
+    void doesNotLeakSecretsWhenBodyIsTruncated() throws Exception {
         // A large JSON body whose secret sits past max-body-length must still be masked,
         // never echoed raw because truncation produced invalid JSON.
         StringBuilder body = new StringBuilder("{\"password\":\"hunter2\",\"filler\":\"");
@@ -149,7 +149,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenBodyOverMaxLength_truncatesBody() throws Exception {
+    void truncatesBodyOverMaxLength() throws Exception {
         StringBuilder big = new StringBuilder("{\"data\":\"");
         big.append("x".repeat(500));
         big.append("\"}");
@@ -164,7 +164,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenLimitedOrFullMode_includesQueryString() throws Exception {
+    void includesQueryStringForLimitedAndFullModes() throws Exception {
         mockMvc().perform(get("/api/orders/123?source=mobile"))
                 .andExpect(status().isOk());
 
@@ -174,7 +174,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenHandlerThrows_capturesExceptionAndStillLogs() throws Exception {
+    void capturesExceptionAndStillLogs() throws Exception {
         try {
             mockMvc().perform(get("/api/boom"));
         } catch (Exception ignored) {
@@ -189,7 +189,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenBinaryContentType_skipsBodyLogging() throws Exception {
+    void skipsBinaryContentTypes() throws Exception {
         mockMvc().perform(post("/api/binary")
                         .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .content(new byte[]{1, 2, 3}))
@@ -202,7 +202,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenResponseLogged_responseBodyStillReachesClient() throws Exception {
+    void responseBodyStillReachesClient() throws Exception {
         MvcResult result = mockMvc().perform(get("/api/orders/123?source=mobile"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -212,7 +212,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doFilter_whenIncomingRequestIdHeader_honorsIt() throws Exception {
+    void honorsIncomingRequestIdHeader() throws Exception {
         MvcResult result = mockMvc().perform(get("/api/orders/123").header("X-Request-Id", "external-id"))
                 .andExpect(status().isOk())
                 .andReturn();

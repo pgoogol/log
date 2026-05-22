@@ -2,14 +2,14 @@ package com.pgoogol.httpexchangelogger.sanitizer;
 
 import com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerProperties;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
-import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
-import java.util.Objects;
+import java.util.List;
+import java.util.Map;
 
 public class JsonBodySanitizer implements BodySanitizer {
 
@@ -23,18 +23,18 @@ public class JsonBodySanitizer implements BodySanitizer {
 
     public JsonBodySanitizer(ObjectMapper objectMapper,
                              SensitiveValueMasker masker,
-                             HttpExchangeLoggerProperties.@Nullable Mask maskProperties) {
+                             HttpExchangeLoggerProperties.Mask maskProperties) {
         this.objectMapper = objectMapper;
         this.masker = masker;
-        this.maskingEnabled = Objects.nonNull(maskProperties) && maskProperties.isEnabled();
-        this.hasSensitiveFields = Objects.nonNull(maskProperties)
-                && Objects.nonNull(maskProperties.getFields())
+        this.maskingEnabled = maskProperties != null && maskProperties.isEnabled();
+        this.hasSensitiveFields = maskProperties != null
+                && maskProperties.getFields() != null
                 && !maskProperties.getFields().isEmpty();
     }
 
     @Override
-    public @Nullable String sanitize(@Nullable String body, @Nullable String contentType) {
-        if (Objects.isNull(body) || body.isEmpty()) {
+    public String sanitize(String body, String contentType) {
+        if (body == null || body.isEmpty()) {
             return body;
         }
         if (!maskingEnabled) {
@@ -45,8 +45,8 @@ public class JsonBodySanitizer implements BodySanitizer {
         }
 
         try {
-            var root = objectMapper.readTree(body);
-            var sanitized = mask(root);
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode sanitized = mask(root);
             return objectMapper.writeValueAsString(sanitized);
         } catch (Exception ex) {
             // Fail closed: masking was requested but the body could not be parsed
@@ -55,22 +55,22 @@ public class JsonBodySanitizer implements BodySanitizer {
         }
     }
 
-    private JsonNode mask(@Nullable JsonNode node) {
-        if (Objects.isNull(node) || node.isNull()) {
+    private JsonNode mask(JsonNode node) {
+        if (node == null || node.isNull()) {
             return node;
         }
         if (node.isObject()) {
-            var object = (ObjectNode) node;
-            var names = new ArrayList<String>();
-            for (var entry : object.properties()) {
+            ObjectNode object = (ObjectNode) node;
+            List<String> names = new ArrayList<>();
+            for (Map.Entry<String, JsonNode> entry : object.properties()) {
                 names.add(entry.getKey());
             }
-            for (var name : names) {
+            for (String name : names) {
                 if (masker.isSensitive(name)) {
                     object.put(name, SensitiveValueMasker.MASK);
                 } else {
-                    var value = object.get(name);
-                    if (Objects.nonNull(value) && (value.isObject() || value.isArray())) {
+                    JsonNode value = object.get(name);
+                    if (value != null && (value.isObject() || value.isArray())) {
                         mask(value);
                     }
                 }
@@ -78,9 +78,9 @@ public class JsonBodySanitizer implements BodySanitizer {
             return object;
         }
         if (node.isArray()) {
-            var array = (ArrayNode) node;
-            for (var i = 0; i < array.size(); i++) {
-                var item = array.get(i);
+            ArrayNode array = (ArrayNode) node;
+            for (int i = 0; i < array.size(); i++) {
+                JsonNode item = array.get(i);
                 if (item.isObject() || item.isArray()) {
                     mask(item);
                 }

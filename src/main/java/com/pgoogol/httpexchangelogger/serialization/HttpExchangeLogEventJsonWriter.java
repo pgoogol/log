@@ -1,8 +1,8 @@
 package com.pgoogol.httpexchangelogger.serialization;
 
 import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
-import org.jspecify.annotations.NonNull;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 public class HttpExchangeLogEventJsonWriter {
 
@@ -15,7 +15,7 @@ public class HttpExchangeLogEventJsonWriter {
         this.objectMapper = objectMapper;
     }
 
-    public String write(@NonNull HttpExchangeLogEvent event) {
+    public String write(HttpExchangeLogEvent event) {
         try {
             return objectMapper.writeValueAsString(event);
         } catch (Exception ex) {
@@ -25,7 +25,7 @@ public class HttpExchangeLogEventJsonWriter {
 
     private String fallback(Exception ex) {
         try {
-            var node = objectMapper.createObjectNode();
+            ObjectNode node = objectMapper.createObjectNode();
             node.put("type", "http_exchange");
             node.put("serializationError", String.valueOf(ex.getMessage()));
             return objectMapper.writeValueAsString(node);
