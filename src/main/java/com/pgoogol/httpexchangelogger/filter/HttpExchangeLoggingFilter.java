@@ -1,0 +1,105 @@
+package com.pgoogol.httpexchangelogger.filter;
+
+import com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerProperties;
+import com.pgoogol.httpexchangelogger.factory.HttpExchangeLogEventFactory;
+import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
+import com.pgoogol.httpexchangelogger.model.HttpLogMode;
+import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
+import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.ContentCachingRequestWrapper;
+import org.springframework.web.util.ContentCachingResponseWrapper;
+
+import java.io.IOException;
+
+public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HttpExchangeLoggingFilter.class);
+
+    private final HttpExchangeLoggerProperties properties;
+    private final EndpointLoggingModeResolver modeResolver;
+    private final HttpExchangeLogEventFactory eventFactory;
+    private final HttpExchangeLogSink sink;
+    private final RequestIdProvider requestIdProvider;
+
+    public HttpExchangeLoggingFilter(HttpExchangeLoggerProperties properties,
+                                     EndpointLoggingModeResolver modeResolver,
+                                     HttpExchangeLogEventFactory eventFactory,
+                                     HttpExchangeLogSink sink,
+                                     RequestIdProvider requestIdProvider) {
+        this.properties = properties;
+        this.modeResolver = modeResolver;
+        this.eventFactory = eventFactory;
+        this.sink = sink;
+        this.requestIdProvider = requestIdProvider;
+    }
+
+    private static int resolveCacheLimit(int maxBodyLength) {
+        if (maxBodyLength <= 0) {
+            return 1;
+        }
+        long expanded = (long) maxBodyLength * 4L + 1L;
+        if (expanded > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) expanded;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        if (!properties.isEnabled()) {
+            return true;
+        }
+        HttpLogMode mode = modeResolver.resolve(request);
+        return mode == HttpLogMode.OFF;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        HttpLogMode mode = modeResolver.resolve(request);
+        String requestId = requestIdProvider.getOrCreateRequestId(request, response);
+
+        ContentCachingRequestWrapper wrappedRequest =
+                new ContentCachingRequestWrapper(request, resolveCacheLimit(properties.getMaxBodyLength()));
+
+        ContentCachingResponseWrapper wrappedResponse =
+                new ContentCachingResponseWrapper(response);
+
+        long startedAt = System.nanoTime();
+        Throwable exception = null;
+
+        try {
+            filterChain.doFilter(wrappedRequest, wrappedResponse);
+        } catch (ServletException | IOException | RuntimeException ex) {
+            exception = ex;
+            throw ex;
+        } finally {
+            long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
+            try {
+                HttpExchangeLogEvent event = eventFactory.create(
+                        wrappedRequest,
+                        wrappedResponse,
+                        mode,
+                        requestId,
+                        durationMs,
+                        exception
+                );
+                sink.log(event);
+            } catch (RuntimeException loggingException) {
+                LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
+            } finally {
+                wrappedResponse.copyBodyToResponse();
+            }
+        }
+    }
+}

@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.yourcompany</groupId>
+    <groupId>com.pgoogol</groupId>
     <artifactId>http-exchange-logger-starter</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>

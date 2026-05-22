@@ -19,7 +19,7 @@ Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami pe
 
 ```xml
 <dependency>
-    <groupId>com.yourcompany</groupId>
+    <groupId>com.pgoogol</groupId>
     <artifactId>http-exchange-logger-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
