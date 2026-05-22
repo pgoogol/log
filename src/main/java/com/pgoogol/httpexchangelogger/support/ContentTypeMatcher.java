@@ -11,77 +11,74 @@ public final class ContentTypeMatcher {
         if (contentType == null || contentType.isBlank()) {
             return false;
         }
-        String normalized = normalize(contentType);
-        return isJson(normalized)
-                || isXml(normalized)
-                || isFormUrlEncoded(normalized)
-                || isText(normalized);
+        return isJson(contentType)
+                || isXml(contentType)
+                || isFormUrlEncoded(contentType)
+                || isText(contentType);
     }
 
     public static boolean isJson(String contentType) {
-        if (contentType == null) {
+        String base = baseType(contentType);
+        if (base == null) {
             return false;
         }
-        String normalized = normalize(contentType);
-        if (normalized.equals("application/json") || normalized.startsWith("application/json;")) {
+        if (base.equals("application/json")) {
             return true;
         }
-        return normalized.startsWith("application/") && normalized.contains("+json");
+        return base.startsWith("application/") && base.endsWith("+json");
     }
 
     public static boolean isXml(String contentType) {
-        if (contentType == null) {
+        String base = baseType(contentType);
+        if (base == null) {
             return false;
         }
-        String normalized = normalize(contentType);
-        if (normalized.equals("application/xml") || normalized.startsWith("application/xml;")) {
+        if (base.equals("application/xml")) {
             return true;
         }
-        return normalized.startsWith("application/") && normalized.contains("+xml");
+        return base.startsWith("application/") && base.endsWith("+xml");
     }
 
     public static boolean isFormUrlEncoded(String contentType) {
-        if (contentType == null) {
-            return false;
-        }
-        String normalized = normalize(contentType);
-        return normalized.equals("application/x-www-form-urlencoded")
-                || normalized.startsWith("application/x-www-form-urlencoded;");
+        String base = baseType(contentType);
+        return base != null && base.equals("application/x-www-form-urlencoded");
     }
 
     public static boolean isText(String contentType) {
-        if (contentType == null) {
-            return false;
-        }
-        return normalize(contentType).startsWith("text/");
+        String base = baseType(contentType);
+        return base != null && base.startsWith("text/");
     }
 
     public static boolean isMultipart(String contentType) {
-        if (contentType == null) {
-            return false;
-        }
-        return normalize(contentType).startsWith("multipart/");
+        String base = baseType(contentType);
+        return base != null && base.startsWith("multipart/");
     }
 
     public static boolean isBinary(String contentType) {
-        if (contentType == null) {
+        String base = baseType(contentType);
+        if (base == null) {
             return false;
         }
-        String normalized = normalize(contentType);
-        if (isMultipart(normalized)) {
+        if (base.startsWith("multipart/")
+                || base.startsWith("image/")
+                || base.startsWith("audio/")
+                || base.startsWith("video/")) {
             return true;
         }
-        if (normalized.startsWith("image/")
-                || normalized.startsWith("audio/")
-                || normalized.startsWith("video/")) {
-            return true;
-        }
-        return normalized.equals("application/octet-stream")
-                || normalized.equals("application/pdf")
-                || normalized.equals("application/zip");
+        return base.equals("application/octet-stream")
+                || base.equals("application/pdf")
+                || base.equals("application/zip");
     }
 
-    private static String normalize(String contentType) {
-        return contentType.toLowerCase(Locale.ROOT).trim();
+    private static String baseType(String contentType) {
+        if (contentType == null) {
+            return null;
+        }
+        String normalized = contentType.toLowerCase(Locale.ROOT).trim();
+        int semicolon = normalized.indexOf(';');
+        if (semicolon >= 0) {
+            normalized = normalized.substring(0, semicolon);
+        }
+        return normalized.trim();
     }
 }

@@ -2,6 +2,7 @@ package com.pgoogol.httpexchangelogger.autoconfigure;
 
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.core.Ordered;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,9 @@ public class HttpExchangeLoggerProperties {
     private boolean requireTtlForFullLogging = false;
 
     private int maxBodyLength = 10_000;
+
+    /** Servlet filter order; runs early by default so the full exchange is captured. */
+    private int filterOrder = Ordered.HIGHEST_PRECEDENCE + 10;
 
     private Sink sink = new Sink();
 
@@ -55,6 +59,14 @@ public class HttpExchangeLoggerProperties {
 
     public void setMaxBodyLength(int maxBodyLength) {
         this.maxBodyLength = maxBodyLength;
+    }
+
+    public int getFilterOrder() {
+        return filterOrder;
+    }
+
+    public void setFilterOrder(int filterOrder) {
+        this.filterOrder = filterOrder;
     }
 
     public Sink getSink() {

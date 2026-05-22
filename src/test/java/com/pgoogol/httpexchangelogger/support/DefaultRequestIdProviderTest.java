@@ -47,4 +47,28 @@ class DefaultRequestIdProviderTest {
         assertThat(result).isNotBlank();
         assertThat(response.getHeader("X-Request-Id")).isEqualTo("preset");
     }
+
+    @Test
+    void rejectsHeaderWithCrlfInjectionAndGeneratesUuid() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Request-Id", "abc\r\nSet-Cookie: evil=1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        String result = provider.getOrCreateRequestId(request, response);
+
+        assertThat(result).doesNotContain("\r").doesNotContain("\n").doesNotContain("Set-Cookie");
+        UUID.fromString(result);
+        assertThat(response.getHeader("X-Request-Id")).isEqualTo(result);
+    }
+
+    @Test
+    void rejectsOverlongHeader() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Request-Id", "a".repeat(5000));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        String result = provider.getOrCreateRequestId(request, response);
+
+        UUID.fromString(result);
+    }
 }

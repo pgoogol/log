@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 import java.util.Map;
@@ -98,6 +99,16 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
+    void offModeStillSetsRequestIdHeader() throws Exception {
+        MvcResult result = mockMvc().perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(sink.getEvents()).isEmpty();
+        assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
+    }
+
+    @Test
     void fullModeIncludesBodiesAndMasksSensitiveFields() throws Exception {
         MvcResult result = mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,12 +121,31 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.FULL);
+        // Body is kept as a JSON node so it serializes as a nested object, not an escaped string.
+        assertThat(event.getRequestBody()).isInstanceOf(JsonNode.class);
         assertThat(event.getRequestBody().toString()).contains("\"password\":\"***\"");
         assertThat(event.getRequestBody().toString()).contains("\"productId\":\"p_123\"");
         assertThat(event.getRequestHeaders()).isNotNull();
         Map<String, List<String>> requestHeaders = event.getRequestHeaders();
         assertThat(extractByKey(requestHeaders, "Authorization")).contains("***");
         assertThat(event.getResponseBody().toString()).contains("ord_456");
+    }
+
+    @Test
+    void doesNotLeakSecretsWhenBodyIsTruncated() throws Exception {
+        // A large JSON body whose secret sits past max-body-length must still be masked,
+        // never echoed raw because truncation produced invalid JSON.
+        StringBuilder body = new StringBuilder("{\"password\":\"hunter2\",\"filler\":\"");
+        body.append("x".repeat(500));
+        body.append("\"}");
+
+        mockMvc().perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body.toString()))
+                .andExpect(status().isOk());
+
+        HttpExchangeLogEvent event = sink.last();
+        assertThat(event.getRequestBody().toString()).doesNotContain("hunter2");
     }
 
     @Test
@@ -154,6 +184,8 @@ class HttpExchangeLoggingFilterIntegrationTest {
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getExceptionClass()).isEqualTo(IllegalStateException.class.getName());
         assertThat(event.getExceptionMessage()).isEqualTo("Cannot create order");
+        // Status must reflect a server error, not the default 200 still on the response.
+        assertThat(event.getStatus()).isGreaterThanOrEqualTo(500);
     }
 
     @Test

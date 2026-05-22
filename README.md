@@ -12,6 +12,7 @@ Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami pe
 - Spring Framework 7.x
 - Java 17+
 - Stack: Spring MVC / Servlet (jakarta.servlet)
+- Jackson 3 (`tools.jackson`) — dostarczany przez Spring Boot 4, nie trzeba dodawac recznie
 
 ---
 
@@ -25,7 +26,16 @@ Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami pe
 </dependency>
 ```
 
-Po dodaniu zaleznosci auto-konfiguracja rejestruje filtr `HttpExchangeLoggingFilter` oraz wszystkie wymagane beany.
+Po dodaniu zaleznosci auto-konfiguracja rejestruje filtr `HttpExchangeLoggingFilter` (przez `FilterRegistrationBean`) oraz wszystkie wymagane beany.
+
+### Kolejnosc filtra
+
+Filtr jest rejestrowany przez `FilterRegistrationBean` na wzorzec `/*`. Domyslnie dziala wczesnie (wysoki priorytet), aby objac pelny czas obslugi requestu. Kolejnosc mozna zmienic:
+
+```yaml
+http-exchange-logger:
+  filter-order: 100
+```
 
 ---
 
@@ -100,13 +110,17 @@ http-exchange-logger:
 
 Maskowanie jest case-insensitive i rekurencyjne dla JSON-a. Wartosci pol z listy `fields` sa zamieniane na `***`.
 
-Headery `Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` sa maskowane domyslnie, niezaleznie od listy `fields`.
+Headery `Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` sa maskowane **zawsze**, takze gdy `mask.enabled=false` — wylaczenie maskowania nie odslania domyslnych naglowkow z poswiadczeniami. Lista `fields` (dla body i dodatkowych naglowkow) dziala tylko przy `mask.enabled=true`.
+
+Jezeli body jest JSON-em, ale nie da sie go sparsowac (np. niepoprawny lub uciety), a maskowanie pol jest wlaczone, biblioteka **nie loguje surowej tresci** — wstawia placeholder, zeby nie wyciekly sekrety (fail-closed). Maskowanie odbywa sie zawsze przed ucinaniem body.
 
 ---
 
 ## Limit body i pominiete typy
 
-`max-body-length` (domyslnie 10 000 znakow) obowiazuje w kazdym trybie, takze w `FULL`. Po przekroczeniu limitu logowane body jest ucinane, a w evencie pojawia sie `requestBodyTruncated: true` lub `responseBodyTruncated: true`.
+`max-body-length` (domyslnie 10 000 znakow) obowiazuje w kazdym trybie, takze w `FULL`. Po przekroczeniu limitu logowane body jest ucinane, a w evencie pojawia sie `requestBodyTruncated: true` lub `responseBodyTruncated: true`. Ustawienie `max-body-length: 0` wylacza logowanie body (pozostale metadane sa nadal logowane).
+
+Mieszczace sie w limicie body JSON jest logowane jako zagniezdzony obiekt (`requestBody: { ... }`), a nie jako tekst. Body uciete jest logowane jako skrocony string.
 
 Nie sa logowane body dla nieobslugiwanych content type:
 
@@ -222,6 +236,8 @@ Poza pierwsza wersja zostaje:
 - dynamiczne TTL,
 - asynchroniczne logowanie,
 - sampling.
+
+Uwaga techniczna: response body jest buforowane w pamieci przez `ContentCachingResponseWrapper` (standard Spring) zanim zostanie ograniczone przez `max-body-length`. Dla bardzo duzych odpowiedzi oznacza to chwilowe zuzycie pamieci proporcjonalne do rozmiaru odpowiedzi. Request body jest buforowane z gornym limitem.
 
 ---
 

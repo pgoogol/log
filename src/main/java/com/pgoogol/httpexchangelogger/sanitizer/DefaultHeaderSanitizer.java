@@ -40,7 +40,7 @@ public class DefaultHeaderSanitizer implements HeaderSanitizer {
             String name = entry.getKey();
             List<String> values = entry.getValue();
 
-            if (maskingEnabled && isSensitiveHeader(name)) {
+            if (isSensitiveHeader(name)) {
                 result.put(name, maskAll(values));
             } else {
                 result.put(name, values == null ? Collections.emptyList() : new ArrayList<>(values));
@@ -54,7 +54,12 @@ public class DefaultHeaderSanitizer implements HeaderSanitizer {
             return false;
         }
         String normalized = name.toLowerCase(Locale.ROOT);
-        return defaultHeaderMasker.isSensitive(normalized) || masker.isSensitive(normalized);
+        // Built-in credential headers are always masked, even when mask.enabled=false,
+        // so disabling field masking can never leak Authorization/Cookie/etc.
+        if (defaultHeaderMasker.isSensitive(normalized)) {
+            return true;
+        }
+        return maskingEnabled && masker.isSensitive(normalized);
     }
 
     private List<String> maskAll(List<String> values) {

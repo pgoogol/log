@@ -34,4 +34,31 @@ class DefaultClientIpExtractorTest {
 
         assertThat(extractor.extract(request)).isEqualTo("127.0.0.1");
     }
+
+    @Test
+    void skipsUnknownToken() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Forwarded-For", "unknown, 203.0.113.7");
+        request.setRemoteAddr("127.0.0.1");
+
+        assertThat(extractor.extract(request)).isEqualTo("203.0.113.7");
+    }
+
+    @Test
+    void skipsEmptyLeadingSegment() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Forwarded-For", ", 203.0.113.7");
+        request.setRemoteAddr("127.0.0.1");
+
+        assertThat(extractor.extract(request)).isEqualTo("203.0.113.7");
+    }
+
+    @Test
+    void fallsBackWhenForwardedForHasOnlyUnknown() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Forwarded-For", "unknown");
+        request.setRemoteAddr("127.0.0.1");
+
+        assertThat(extractor.extract(request)).isEqualTo("127.0.0.1");
+    }
 }

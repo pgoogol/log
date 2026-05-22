@@ -58,4 +58,20 @@ class ContentTypeMatcherTest {
         assertThat(ContentTypeMatcher.isLoggable("multipart/form-data")).isFalse();
         assertThat(ContentTypeMatcher.isLoggable(null)).isFalse();
     }
+
+    @Test
+    void toleratesWhitespaceBeforeParameterSeparator() {
+        assertThat(ContentTypeMatcher.isJson("application/json ; charset=utf-8")).isTrue();
+        assertThat(ContentTypeMatcher.isLoggable("application/json ; charset=utf-8")).isTrue();
+        assertThat(ContentTypeMatcher.isXml("application/xml ; charset=utf-8")).isTrue();
+        assertThat(ContentTypeMatcher.isFormUrlEncoded("application/x-www-form-urlencoded ; x")).isTrue();
+    }
+
+    @Test
+    void detectsParameterizedBinaryTypes() {
+        assertThat(ContentTypeMatcher.isBinary("application/pdf; name=a")).isTrue();
+        assertThat(ContentTypeMatcher.isBinary("application/octet-stream;charset=binary")).isTrue();
+        assertThat(ContentTypeMatcher.isBinary("application/zip ; x")).isTrue();
+        assertThat(ContentTypeMatcher.isLoggable("application/pdf; name=a")).isFalse();
+    }
 }

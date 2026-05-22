@@ -60,13 +60,17 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void doesNotMaskWhenDisabled() {
-        DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("authorization"), false);
+    void stillMasksBuiltInCredentialHeadersWhenMaskingDisabled() {
+        DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-custom"), false);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));
+        headers.put("X-Custom", List.of("value"));
 
         Map<String, List<String>> result = sanitizer.sanitize(headers);
 
-        assertThat(result.get("Authorization")).containsExactly("Bearer secret");
+        // Built-in credential headers are always masked, even with masking disabled...
+        assertThat(result.get("Authorization")).containsExactly("***");
+        // ...but extra configured header names are only masked when masking is enabled.
+        assertThat(result.get("X-Custom")).containsExactly("value");
     }
 }

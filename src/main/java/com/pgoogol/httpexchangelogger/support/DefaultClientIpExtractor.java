@@ -15,11 +15,11 @@ public class DefaultClientIpExtractor implements ClientIpExtractor {
 
         String forwarded = request.getHeader(X_FORWARDED_FOR);
         if (forwarded != null && !forwarded.isBlank()) {
-            int commaIndex = forwarded.indexOf(',');
-            String first = commaIndex >= 0 ? forwarded.substring(0, commaIndex) : forwarded;
-            String trimmed = first.trim();
-            if (!trimmed.isEmpty()) {
-                return trimmed;
+            for (String segment : forwarded.split(",")) {
+                String candidate = segment.trim();
+                if (!candidate.isEmpty() && !candidate.equalsIgnoreCase("unknown")) {
+                    return candidate;
+                }
             }
         }
 

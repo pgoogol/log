@@ -1,9 +1,9 @@
 package com.pgoogol.httpexchangelogger.sanitizer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -90,8 +90,20 @@ class JsonBodySanitizerTest {
     }
 
     @Test
-    void returnsOriginalBodyWhenJsonIsInvalid() {
+    void failsClosedForInvalidJsonWhenSensitiveFieldsConfigured() {
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password"));
+        String invalid = "{not-json";
+
+        String result = sanitizer.sanitize(invalid, "application/json");
+
+        // Never echo a body we could not parse/mask when masking sensitive fields is requested.
+        assertThat(result).isEqualTo(JsonBodySanitizer.UNPARSEABLE_PLACEHOLDER);
+        assertThat(result).doesNotContain("not-json");
+    }
+
+    @Test
+    void returnsOriginalBodyForInvalidJsonWhenNoSensitiveFields() {
+        JsonBodySanitizer sanitizer = sanitizerWithFields(List.of());
         String invalid = "{not-json";
 
         String result = sanitizer.sanitize(invalid, "application/json");

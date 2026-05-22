@@ -1,6 +1,5 @@
 package com.pgoogol.httpexchangelogger.autoconfigure;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pgoogol.httpexchangelogger.factory.HttpExchangeLogEventFactory;
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
@@ -24,8 +23,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,8 +62,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     public BodySanitizer bodySanitizer(SensitiveValueMasker masker,
                                        HttpExchangeLoggerProperties properties,
                                        ObjectProvider<ObjectMapper> objectMapperProvider) {
-        ObjectMapper mapper = objectMapperProvider.getIfAvailable(ObjectMapper::new);
-        return new JsonBodySanitizer(mapper, masker, properties.getMask());
+        return new JsonBodySanitizer(resolveObjectMapper(objectMapperProvider), masker, properties.getMask());
     }
 
     @Bean
@@ -79,8 +80,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public HttpExchangeLogEventJsonWriter httpExchangeLogEventJsonWriter(ObjectProvider<ObjectMapper> objectMapperProvider) {
-        ObjectMapper mapper = objectMapperProvider.getIfAvailable(ObjectMapper::new);
-        return new HttpExchangeLogEventJsonWriter(mapper);
+        return new HttpExchangeLogEventJsonWriter(resolveObjectMapper(objectMapperProvider));
     }
 
     @Bean
@@ -88,8 +88,14 @@ public class HttpExchangeLoggerAutoConfiguration {
     public HttpExchangeLogEventFactory httpExchangeLogEventFactory(HttpExchangeLoggerProperties properties,
                                                                     HeaderSanitizer headerSanitizer,
                                                                     BodySanitizer bodySanitizer,
-                                                                    ClientIpExtractor clientIpExtractor) {
-        return new HttpExchangeLogEventFactory(properties, headerSanitizer, bodySanitizer, clientIpExtractor);
+                                                                    ClientIpExtractor clientIpExtractor,
+                                                                    ObjectProvider<ObjectMapper> objectMapperProvider) {
+        return new HttpExchangeLogEventFactory(properties, headerSanitizer, bodySanitizer,
+                clientIpExtractor, resolveObjectMapper(objectMapperProvider));
+    }
+
+    private static ObjectMapper resolveObjectMapper(ObjectProvider<ObjectMapper> objectMapperProvider) {
+        return objectMapperProvider.getIfAvailable(() -> JsonMapper.builder().build());
     }
 
     @Bean(name = "httpExchangeLogSink")
@@ -117,5 +123,17 @@ public class HttpExchangeLoggerAutoConfiguration {
                                                                HttpExchangeLogSink sink,
                                                                RequestIdProvider requestIdProvider) {
         return new HttpExchangeLoggingFilter(properties, modeResolver, eventFactory, sink, requestIdProvider);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "httpExchangeLoggingFilterRegistration")
+    public FilterRegistrationBean<HttpExchangeLoggingFilter> httpExchangeLoggingFilterRegistration(
+            HttpExchangeLoggingFilter filter,
+            HttpExchangeLoggerProperties properties) {
+        FilterRegistrationBean<HttpExchangeLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setName("httpExchangeLoggingFilter");
+        registration.addUrlPatterns("/*");
+        registration.setOrder(properties.getFilterOrder());
+        return registration;
     }
 }

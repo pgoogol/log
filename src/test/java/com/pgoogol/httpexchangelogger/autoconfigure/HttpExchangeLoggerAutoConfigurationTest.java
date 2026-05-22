@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,6 +44,29 @@ class HttpExchangeLoggerAutoConfigurationTest {
 
             HttpExchangeLogSink sink = ctx.getBean(HttpExchangeLogSink.class);
             assertThat(sink).isInstanceOf(ConsoleHttpExchangeLogSink.class);
+        });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void registersFilterViaFilterRegistrationBeanWithOrder() {
+        webRunner.run(ctx -> {
+            assertThat(ctx).hasSingleBean(FilterRegistrationBean.class);
+            FilterRegistrationBean<HttpExchangeLoggingFilter> registration =
+                    ctx.getBean(FilterRegistrationBean.class);
+            assertThat(registration.getFilter()).isInstanceOf(HttpExchangeLoggingFilter.class);
+            assertThat(registration.getUrlPatterns()).contains("/*");
+            assertThat(registration.getOrder()).isEqualTo(Ordered.HIGHEST_PRECEDENCE + 10);
+        });
+    }
+
+    @Test
+    void filterOrderIsConfigurable() {
+        webRunner.withPropertyValues("http-exchange-logger.filter-order=42").run(ctx -> {
+            @SuppressWarnings("unchecked")
+            FilterRegistrationBean<HttpExchangeLoggingFilter> registration =
+                    ctx.getBean(FilterRegistrationBean.class);
+            assertThat(registration.getOrder()).isEqualTo(42);
         });
     }
 

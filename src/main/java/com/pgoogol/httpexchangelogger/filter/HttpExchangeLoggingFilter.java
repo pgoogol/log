@@ -54,11 +54,7 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        if (!properties.isEnabled()) {
-            return true;
-        }
-        HttpLogMode mode = modeResolver.resolve(request);
-        return mode == HttpLogMode.OFF;
+        return !properties.isEnabled();
     }
 
     @Override
@@ -67,7 +63,15 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
 
         HttpLogMode mode = modeResolver.resolve(request);
+
+        // Correlation id is established for every request the filter sees (including OFF),
+        // so downstream consumers always get an X-Request-Id.
         String requestId = requestIdProvider.getOrCreateRequestId(request, response);
+
+        if (mode == HttpLogMode.OFF) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         ContentCachingRequestWrapper wrappedRequest =
                 new ContentCachingRequestWrapper(request, resolveCacheLimit(properties.getMaxBodyLength()));
@@ -98,7 +102,21 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             } catch (RuntimeException loggingException) {
                 LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
             } finally {
-                wrappedResponse.copyBodyToResponse();
+                copyBodyToResponse(wrappedResponse, exception);
+            }
+        }
+    }
+
+    private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, Throwable inFlight)
+            throws IOException {
+        try {
+            wrappedResponse.copyBodyToResponse();
+        } catch (IOException copyException) {
+            // Never let a copy failure mask the exception that is already propagating.
+            if (inFlight != null) {
+                inFlight.addSuppressed(copyException);
+            } else {
+                throw copyException;
             }
         }
     }
