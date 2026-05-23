@@ -41,12 +41,14 @@ public class HttpExchangeLoggerAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public EndpointLoggingModeResolver endpointLoggingModeResolver(HttpExchangeLoggerProperties properties) {
+
         return new EndpointLoggingModeResolver(properties);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public SensitiveValueMasker sensitiveValueMasker(HttpExchangeLoggerProperties properties) {
+
         return new SensitiveValueMasker(properties.getMask().getFields());
     }
 
@@ -54,6 +56,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     @ConditionalOnMissingBean
     public HeaderSanitizer headerSanitizer(SensitiveValueMasker masker,
                                            HttpExchangeLoggerProperties properties) {
+
         return new DefaultHeaderSanitizer(masker, properties.getMask());
     }
 
@@ -62,39 +65,45 @@ public class HttpExchangeLoggerAutoConfiguration {
     public BodySanitizer bodySanitizer(SensitiveValueMasker masker,
                                        HttpExchangeLoggerProperties properties,
                                        ObjectProvider<ObjectMapper> objectMapperProvider) {
+
         return new JsonBodySanitizer(resolveObjectMapper(objectMapperProvider), masker, properties.getMask());
     }
 
     @Bean
     @ConditionalOnMissingBean
     public RequestIdProvider requestIdProvider() {
+
         return new DefaultRequestIdProvider();
     }
 
     @Bean
     @ConditionalOnMissingBean
     public ClientIpExtractor clientIpExtractor() {
+
         return new DefaultClientIpExtractor();
     }
 
     @Bean
     @ConditionalOnMissingBean
     public HttpExchangeLogEventJsonWriter httpExchangeLogEventJsonWriter(ObjectProvider<ObjectMapper> objectMapperProvider) {
+
         return new HttpExchangeLogEventJsonWriter(resolveObjectMapper(objectMapperProvider));
     }
 
     @Bean
     @ConditionalOnMissingBean
     public HttpExchangeLogEventFactory httpExchangeLogEventFactory(HttpExchangeLoggerProperties properties,
-                                                                    HeaderSanitizer headerSanitizer,
-                                                                    BodySanitizer bodySanitizer,
-                                                                    ClientIpExtractor clientIpExtractor,
-                                                                    ObjectProvider<ObjectMapper> objectMapperProvider) {
+                                                                   HeaderSanitizer headerSanitizer,
+                                                                   BodySanitizer bodySanitizer,
+                                                                   ClientIpExtractor clientIpExtractor,
+                                                                   ObjectProvider<ObjectMapper> objectMapperProvider) {
+
         return new HttpExchangeLogEventFactory(properties, headerSanitizer, bodySanitizer,
                 clientIpExtractor, resolveObjectMapper(objectMapperProvider));
     }
 
     private static ObjectMapper resolveObjectMapper(ObjectProvider<ObjectMapper> objectMapperProvider) {
+
         return objectMapperProvider.getIfAvailable(() -> JsonMapper.builder().build());
     }
 
@@ -102,6 +111,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     @ConditionalOnMissingBean(name = "httpExchangeLogSink")
     public HttpExchangeLogSink httpExchangeLogSink(HttpExchangeLoggerProperties properties,
                                                    HttpExchangeLogEventJsonWriter jsonWriter) {
+
         List<HttpExchangeLogSink> sinks = new ArrayList<>();
         if (properties.getSink().isConsole()) {
             sinks.add(new ConsoleHttpExchangeLogSink(jsonWriter));
@@ -110,7 +120,7 @@ public class HttpExchangeLoggerAutoConfiguration {
             return new NoopHttpExchangeLogSink();
         }
         if (sinks.size() == 1) {
-            return sinks.get(0);
+            return sinks.getFirst();
         }
         return new CompositeHttpExchangeLogSink(sinks);
     }
@@ -122,6 +132,7 @@ public class HttpExchangeLoggerAutoConfiguration {
                                                                HttpExchangeLogEventFactory eventFactory,
                                                                HttpExchangeLogSink sink,
                                                                RequestIdProvider requestIdProvider) {
+
         return new HttpExchangeLoggingFilter(properties, modeResolver, eventFactory, sink, requestIdProvider);
     }
 
@@ -130,10 +141,12 @@ public class HttpExchangeLoggerAutoConfiguration {
     public FilterRegistrationBean<HttpExchangeLoggingFilter> httpExchangeLoggingFilterRegistration(
             HttpExchangeLoggingFilter filter,
             HttpExchangeLoggerProperties properties) {
+
         FilterRegistrationBean<HttpExchangeLoggingFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setName("httpExchangeLoggingFilter");
         registration.addUrlPatterns("/*");
         registration.setOrder(properties.getFilterOrder());
         return registration;
     }
+
 }

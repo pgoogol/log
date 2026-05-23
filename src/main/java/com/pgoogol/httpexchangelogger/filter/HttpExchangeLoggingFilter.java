@@ -11,6 +11,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,6 +19,7 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
@@ -34,6 +36,7 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                                      HttpExchangeLogEventFactory eventFactory,
                                      HttpExchangeLogSink sink,
                                      RequestIdProvider requestIdProvider) {
+
         this.properties = properties;
         this.modeResolver = modeResolver;
         this.eventFactory = eventFactory;
@@ -42,25 +45,29 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
     }
 
     private static int resolveCacheLimit(int maxBodyLength) {
+
         if (maxBodyLength <= 0) {
+
             return 1;
         }
         long expanded = (long) maxBodyLength * 4L + 1L;
         if (expanded > Integer.MAX_VALUE) {
+
             return Integer.MAX_VALUE;
         }
         return (int) expanded;
     }
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+
         return !properties.isEnabled();
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         HttpLogMode mode = modeResolver.resolve(request);
 
@@ -69,6 +76,7 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         String requestId = requestIdProvider.getOrCreateRequestId(request, response);
 
         if (mode == HttpLogMode.OFF) {
+
             filterChain.doFilter(request, response);
             return;
         }
@@ -83,13 +91,17 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         Throwable exception = null;
 
         try {
+
             filterChain.doFilter(wrappedRequest, wrappedResponse);
         } catch (ServletException | IOException | RuntimeException ex) {
+
             exception = ex;
             throw ex;
         } finally {
+
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
+
                 HttpExchangeLogEvent event = eventFactory.create(
                         wrappedRequest,
                         wrappedResponse,
@@ -100,8 +112,10 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                 );
                 sink.log(event);
             } catch (RuntimeException loggingException) {
+
                 LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
             } finally {
+
                 copyBodyToResponse(wrappedResponse, exception);
             }
         }
@@ -109,15 +123,21 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
     private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, Throwable inFlight)
             throws IOException {
+
         try {
+
             wrappedResponse.copyBodyToResponse();
         } catch (IOException copyException) {
+
             // Never let a copy failure mask the exception that is already propagating.
-            if (inFlight != null) {
+            if (Objects.nonNull(inFlight)) {
+
                 inFlight.addSuppressed(copyException);
             } else {
+
                 throw copyException;
             }
         }
     }
+
 }

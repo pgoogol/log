@@ -1,14 +1,18 @@
 package com.pgoogol.httpexchangelogger.support;
 
 import java.util.Locale;
+import java.util.Objects;
 
 public final class ContentTypeMatcher {
 
     private ContentTypeMatcher() {
+
     }
 
     public static boolean isLoggable(String contentType) {
-        if (contentType == null || contentType.isBlank()) {
+
+        if (Objects.isNull(contentType) || contentType.isBlank()) {
+
             return false;
         }
         return isJson(contentType)
@@ -18,19 +22,24 @@ public final class ContentTypeMatcher {
     }
 
     public static boolean isJson(String contentType) {
+
         String base = baseType(contentType);
-        if (base == null) {
+        if (Objects.isNull(base)) {
+
             return false;
         }
         if (base.equals("application/json")) {
+
             return true;
         }
         return base.startsWith("application/") && base.endsWith("+json");
     }
 
     public static boolean isXml(String contentType) {
+
         String base = baseType(contentType);
-        if (base == null) {
+        if (Objects.isNull(base)) {
+
             return false;
         }
         if (base.equals("application/xml")) {
@@ -40,23 +49,28 @@ public final class ContentTypeMatcher {
     }
 
     public static boolean isFormUrlEncoded(String contentType) {
+
         String base = baseType(contentType);
-        return base != null && base.equals("application/x-www-form-urlencoded");
+        return Objects.nonNull(base) && base.equals("application/x-www-form-urlencoded");
     }
 
     public static boolean isText(String contentType) {
+
         String base = baseType(contentType);
-        return base != null && base.startsWith("text/");
+        return Objects.nonNull(base) && base.startsWith("text/");
     }
 
     public static boolean isMultipart(String contentType) {
+
         String base = baseType(contentType);
-        return base != null && base.startsWith("multipart/");
+        return Objects.nonNull(base) && base.startsWith("multipart/");
     }
 
     public static boolean isBinary(String contentType) {
+
         String base = baseType(contentType);
-        if (base == null) {
+        if (Objects.isNull(base)) {
+
             return false;
         }
         if (base.startsWith("multipart/")
@@ -71,7 +85,8 @@ public final class ContentTypeMatcher {
     }
 
     private static String baseType(String contentType) {
-        if (contentType == null) {
+
+        if (Objects.isNull(contentType)) {
             return null;
         }
         String normalized = contentType.toLowerCase(Locale.ROOT).trim();
@@ -81,4 +96,5 @@ public final class ContentTypeMatcher {
         }
         return normalized.trim();
     }
+
 }

@@ -10,6 +10,7 @@ class SensitiveValueMaskerTest {
 
     @Test
     void detectsCaseInsensitiveMatches() {
+
         SensitiveValueMasker masker = new SensitiveValueMasker(List.of("password", "Token"));
 
         assertThat(masker.isSensitive("password")).isTrue();
@@ -21,6 +22,7 @@ class SensitiveValueMaskerTest {
 
     @Test
     void returnsMaskForNonNullValues() {
+
         SensitiveValueMasker masker = new SensitiveValueMasker(List.of("password"));
 
         assertThat(masker.mask("secret")).isEqualTo("***");
@@ -29,8 +31,10 @@ class SensitiveValueMaskerTest {
 
     @Test
     void handlesNullFieldsList() {
+
         SensitiveValueMasker masker = new SensitiveValueMasker(null);
 
         assertThat(masker.isSensitive("password")).isFalse();
     }
+
 }

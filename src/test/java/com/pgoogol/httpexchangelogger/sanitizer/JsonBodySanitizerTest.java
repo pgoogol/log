@@ -15,10 +15,12 @@ class JsonBodySanitizerTest {
 
     @BeforeEach
     void setUp() {
+
         objectMapper = new ObjectMapper();
     }
 
     private JsonBodySanitizer sanitizerWithFields(List<String> fields) {
+
         HttpExchangeLoggerProperties.Mask mask = new HttpExchangeLoggerProperties.Mask();
         mask.setEnabled(true);
         mask.setFields(fields);
@@ -27,6 +29,7 @@ class JsonBodySanitizerTest {
     }
 
     private JsonBodySanitizer disabledSanitizer() {
+
         HttpExchangeLoggerProperties.Mask mask = new HttpExchangeLoggerProperties.Mask();
         mask.setEnabled(false);
         mask.setFields(List.of("password"));
@@ -36,6 +39,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void masksTopLevelFields() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password", "email"));
         String input = "{\"email\":\"u@x.com\",\"password\":\"secret\",\"productId\":\"p_123\"}";
 
@@ -48,6 +52,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void masksNestedAndArrayFields() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password", "token"));
         String input = "{\"user\":{\"password\":\"x\"},\"items\":[{\"token\":\"abc\"}]}";
 
@@ -59,6 +64,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void maskingIsCaseInsensitive() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("token"));
         String input = "{\"Token\":\"a\",\"TOKEN\":\"b\",\"accessToken\":\"c\"}";
 
@@ -71,6 +77,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void returnsOriginalBodyWhenMaskingDisabled() {
+
         JsonBodySanitizer sanitizer = disabledSanitizer();
         String input = "{\"password\":\"secret\"}";
 
@@ -81,6 +88,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void returnsOriginalBodyWhenContentTypeIsNotJson() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password"));
         String input = "password=secret";
 
@@ -91,6 +99,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void failsClosedForInvalidJsonWhenSensitiveFieldsConfigured() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password"));
         String invalid = "{not-json";
 
@@ -103,6 +112,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void returnsOriginalBodyForInvalidJsonWhenNoSensitiveFields() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of());
         String invalid = "{not-json";
 
@@ -113,6 +123,7 @@ class JsonBodySanitizerTest {
 
     @Test
     void handlesVendorJsonContentTypes() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password"));
         String input = "{\"password\":\"secret\"}";
 
@@ -123,8 +134,10 @@ class JsonBodySanitizerTest {
 
     @Test
     void returnsNullForNullBody() {
+
         JsonBodySanitizer sanitizer = sanitizerWithFields(List.of("password"));
 
         assertThat(sanitizer.sanitize(null, "application/json")).isNull();
     }
+
 }

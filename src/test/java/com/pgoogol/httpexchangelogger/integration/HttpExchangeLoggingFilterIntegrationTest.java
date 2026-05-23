@@ -3,7 +3,6 @@ package com.pgoogol.httpexchangelogger.integration;
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
 import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
-import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +57,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
     HttpExchangeLoggingFilter filter;
 
     private MockMvc mockMvc() {
+
         return MockMvcBuilders.webAppContextSetup(webApplicationContext)
                 .addFilters(filter)
                 .build();
@@ -65,11 +65,13 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @AfterEach
     void clearSink() {
+
         sink.clear();
     }
 
     @Test
     void basicModeOnlyLogsMetadata() throws Exception {
+
         MvcResult result = mockMvc().perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"password\":\"secret\"}"))
@@ -92,6 +94,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void offModeSkipsLogging() throws Exception {
+
         mockMvc().perform(get("/actuator/health"))
                 .andExpect(status().isOk());
 
@@ -100,6 +103,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void offModeStillSetsRequestIdHeader() throws Exception {
+
         MvcResult result = mockMvc().perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -110,6 +114,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void fullModeIncludesBodiesAndMasksSensitiveFields() throws Exception {
+
         MvcResult result = mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer my-token")
@@ -135,13 +140,11 @@ class HttpExchangeLoggingFilterIntegrationTest {
     void doesNotLeakSecretsWhenBodyIsTruncated() throws Exception {
         // A large JSON body whose secret sits past max-body-length must still be masked,
         // never echoed raw because truncation produced invalid JSON.
-        StringBuilder body = new StringBuilder("{\"password\":\"hunter2\",\"filler\":\"");
-        body.append("x".repeat(500));
-        body.append("\"}");
+        String body = "{\"password\":\"hunter2\",\"filler\":\"%s\"}".formatted("x".repeat(500));
 
         mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body.toString()))
+                        .content(body))
                 .andExpect(status().isOk());
 
         HttpExchangeLogEvent event = sink.last();
@@ -150,13 +153,12 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void truncatesBodyOverMaxLength() throws Exception {
-        StringBuilder big = new StringBuilder("{\"data\":\"");
-        big.append("x".repeat(500));
-        big.append("\"}");
+
+        String big = "{\"data\":\"%s\"}".formatted("x".repeat(500));
 
         mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(big.toString()))
+                        .content(big))
                 .andExpect(status().isOk());
 
         HttpExchangeLogEvent event = sink.last();
@@ -165,6 +167,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void includesQueryStringForLimitedAndFullModes() throws Exception {
+
         mockMvc().perform(get("/api/orders/123?source=mobile"))
                 .andExpect(status().isOk());
 
@@ -175,9 +178,12 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void capturesExceptionAndStillLogs() throws Exception {
+
         try {
+
             mockMvc().perform(get("/api/boom"));
         } catch (Exception ignored) {
+
             // exception is propagated by MockMvc / dispatcher
         }
 
@@ -190,6 +196,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void skipsBinaryContentTypes() throws Exception {
+
         mockMvc().perform(post("/api/binary")
                         .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .content(new byte[]{1, 2, 3}))
@@ -203,6 +210,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void responseBodyStillReachesClient() throws Exception {
+
         MvcResult result = mockMvc().perform(get("/api/orders/123?source=mobile"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -213,6 +221,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
     @Test
     void honorsIncomingRequestIdHeader() throws Exception {
+
         MvcResult result = mockMvc().perform(get("/api/orders/123").header("X-Request-Id", "external-id"))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -223,8 +232,11 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     private List<String> extractByKey(Map<String, List<String>> headers, String key) {
+
         for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+
             if (entry.getKey().equalsIgnoreCase(key)) {
+
                 return entry.getValue();
             }
         }
@@ -234,14 +246,19 @@ class HttpExchangeLoggingFilterIntegrationTest {
     @SpringBootConfiguration
     @EnableAutoConfiguration
     static class TestApp {
+
         @Bean
         TestController testController() {
+
             return new TestController();
         }
 
         @Bean(name = "httpExchangeLogSink")
         RecordingHttpExchangeLogSink recordingSink() {
+
             return new RecordingHttpExchangeLogSink();
         }
+
     }
+
 }

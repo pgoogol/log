@@ -49,6 +49,7 @@ public final class HttpExchangeLogEvent {
     private final String exceptionMessage;
 
     private HttpExchangeLogEvent(Builder builder) {
+
         this.type = builder.type;
         this.requestId = builder.requestId;
         this.method = builder.method;
@@ -70,78 +71,97 @@ public final class HttpExchangeLogEvent {
     }
 
     public static Builder builder() {
+
         return new Builder();
     }
 
     public String getType() {
+
         return type;
     }
 
     public String getRequestId() {
+
         return requestId;
     }
 
     public String getMethod() {
+
         return method;
     }
 
     public String getPath() {
+
         return path;
     }
 
     public String getQueryString() {
+
         return queryString;
     }
 
     public String getClientIp() {
+
         return clientIp;
     }
 
     public int getStatus() {
+
         return status;
     }
 
     public long getDurationMs() {
+
         return durationMs;
     }
 
     public HttpLogMode getConfiguredMode() {
+
         return configuredMode;
     }
 
     public HttpLogMode getEffectiveMode() {
+
         return effectiveMode;
     }
 
     public Map<String, List<String>> getRequestHeaders() {
+
         return requestHeaders;
     }
 
     public Map<String, List<String>> getResponseHeaders() {
+
         return responseHeaders;
     }
 
     public Object getRequestBody() {
+
         return requestBody;
     }
 
     public Object getResponseBody() {
+
         return responseBody;
     }
 
     public boolean isRequestBodyTruncated() {
+
         return requestBodyTruncated;
     }
 
     public boolean isResponseBodyTruncated() {
+
         return responseBodyTruncated;
     }
 
     public String getExceptionClass() {
+
         return exceptionClass;
     }
 
     public String getExceptionMessage() {
+
         return exceptionMessage;
     }
 
@@ -167,100 +187,122 @@ public final class HttpExchangeLogEvent {
         private String exceptionMessage;
 
         private Builder() {
+
         }
 
         public Builder type(String type) {
+
             this.type = type;
             return this;
         }
 
         public Builder requestId(String requestId) {
+
             this.requestId = requestId;
             return this;
         }
 
         public Builder method(String method) {
+
             this.method = method;
             return this;
         }
 
         public Builder path(String path) {
+
             this.path = path;
             return this;
         }
 
         public Builder queryString(String queryString) {
+
             this.queryString = queryString;
             return this;
         }
 
         public Builder clientIp(String clientIp) {
+
             this.clientIp = clientIp;
             return this;
         }
 
         public Builder status(int status) {
+
             this.status = status;
             return this;
         }
 
         public Builder durationMs(long durationMs) {
+
             this.durationMs = durationMs;
             return this;
         }
 
         public Builder configuredMode(HttpLogMode configuredMode) {
+
             this.configuredMode = configuredMode;
             return this;
         }
 
         public Builder effectiveMode(HttpLogMode effectiveMode) {
+
             this.effectiveMode = effectiveMode;
             return this;
         }
 
         public Builder requestHeaders(Map<String, List<String>> requestHeaders) {
+
             this.requestHeaders = requestHeaders;
             return this;
         }
 
         public Builder responseHeaders(Map<String, List<String>> responseHeaders) {
+
             this.responseHeaders = responseHeaders;
             return this;
         }
 
         public Builder requestBody(Object requestBody) {
+
             this.requestBody = requestBody;
             return this;
         }
 
         public Builder responseBody(Object responseBody) {
+
             this.responseBody = responseBody;
             return this;
         }
 
         public Builder requestBodyTruncated(boolean requestBodyTruncated) {
+
             this.requestBodyTruncated = requestBodyTruncated;
             return this;
         }
 
         public Builder responseBodyTruncated(boolean responseBodyTruncated) {
+
             this.responseBodyTruncated = responseBodyTruncated;
             return this;
         }
 
         public Builder exceptionClass(String exceptionClass) {
+
             this.exceptionClass = exceptionClass;
             return this;
         }
 
         public Builder exceptionMessage(String exceptionMessage) {
+
             this.exceptionMessage = exceptionMessage;
             return this;
         }
 
         public HttpExchangeLogEvent build() {
+
             return new HttpExchangeLogEvent(this);
         }
+
     }
+
 }

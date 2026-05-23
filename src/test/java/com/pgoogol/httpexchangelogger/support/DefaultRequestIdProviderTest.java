@@ -14,6 +14,7 @@ class DefaultRequestIdProviderTest {
 
     @Test
     void usesIncomingHeaderWhenPresent() {
+
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Request-Id", "external-id");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -26,6 +27,7 @@ class DefaultRequestIdProviderTest {
 
     @Test
     void generatesUuidWhenHeaderMissing() {
+
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -38,6 +40,7 @@ class DefaultRequestIdProviderTest {
 
     @Test
     void preservesAlreadySetResponseHeader() {
+
         MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         response.setHeader("X-Request-Id", "preset");
@@ -50,6 +53,7 @@ class DefaultRequestIdProviderTest {
 
     @Test
     void rejectsHeaderWithCrlfInjectionAndGeneratesUuid() {
+
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Request-Id", "abc\r\nSet-Cookie: evil=1");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -63,6 +67,7 @@ class DefaultRequestIdProviderTest {
 
     @Test
     void rejectsOverlongHeader() {
+
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Request-Id", "a".repeat(5000));
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -71,4 +76,5 @@ class DefaultRequestIdProviderTest {
 
         UUID.fromString(result);
     }
+
 }

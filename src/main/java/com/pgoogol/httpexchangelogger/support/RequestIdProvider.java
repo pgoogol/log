@@ -6,4 +6,5 @@ import jakarta.servlet.http.HttpServletResponse;
 public interface RequestIdProvider {
 
     String getOrCreateRequestId(HttpServletRequest request, HttpServletResponse response);
+
 }

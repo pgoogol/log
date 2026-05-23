@@ -12,7 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EndpointLoggingModeResolverTest {
 
     private EndpointLoggingModeResolver resolverWithRules(HttpLogMode defaultMode,
-                                                         List<HttpExchangeLoggerProperties.Endpoint> endpoints) {
+                                                          List<HttpExchangeLoggerProperties.Endpoint> endpoints) {
+
         HttpExchangeLoggerProperties properties = new HttpExchangeLoggerProperties();
         properties.setDefaultMode(defaultMode);
         properties.setEndpoints(endpoints);
@@ -20,6 +21,7 @@ class EndpointLoggingModeResolverTest {
     }
 
     private HttpExchangeLoggerProperties.Endpoint rule(String pattern, HttpLogMode mode) {
+
         HttpExchangeLoggerProperties.Endpoint endpoint = new HttpExchangeLoggerProperties.Endpoint();
         endpoint.setPattern(pattern);
         endpoint.setMode(mode);
@@ -28,6 +30,7 @@ class EndpointLoggingModeResolverTest {
 
     @Test
     void usesDefaultModeWhenNoRulesMatch() {
+
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, new ArrayList<>());
 
         assertThat(resolver.resolve("/api/anything")).isEqualTo(HttpLogMode.BASIC);
@@ -35,6 +38,7 @@ class EndpointLoggingModeResolverTest {
 
     @Test
     void firstMatchingRuleWins() {
+
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
                 rule("/api/orders/**", HttpLogMode.FULL),
                 rule("/api/**", HttpLogMode.LIMITED)
@@ -46,6 +50,7 @@ class EndpointLoggingModeResolverTest {
 
     @Test
     void offRuleDisablesLogging() {
+
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.FULL, List.of(
                 rule("/actuator/**", HttpLogMode.OFF)
         ));
@@ -56,6 +61,7 @@ class EndpointLoggingModeResolverTest {
 
     @Test
     void ignoresRulesMissingPatternOrMode() {
+
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
                 rule(null, HttpLogMode.FULL),
                 rule("/api/**", null),
@@ -64,4 +70,5 @@ class EndpointLoggingModeResolverTest {
 
         assertThat(resolver.resolve("/api/orders/9")).isEqualTo(HttpLogMode.FULL);
     }
+
 }

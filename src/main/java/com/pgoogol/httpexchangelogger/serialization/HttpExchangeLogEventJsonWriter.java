@@ -12,25 +12,33 @@ public class HttpExchangeLogEventJsonWriter {
     private final ObjectMapper objectMapper;
 
     public HttpExchangeLogEventJsonWriter(ObjectMapper objectMapper) {
+
         this.objectMapper = objectMapper;
     }
 
     public String write(HttpExchangeLogEvent event) {
+
         try {
+
             return objectMapper.writeValueAsString(event);
         } catch (Exception ex) {
+
             return fallback(ex);
         }
     }
 
     private String fallback(Exception ex) {
+
         try {
+
             ObjectNode node = objectMapper.createObjectNode();
             node.put("type", "http_exchange");
             node.put("serializationError", String.valueOf(ex.getMessage()));
             return objectMapper.writeValueAsString(node);
         } catch (Exception inner) {
+
             return STATIC_FALLBACK;
         }
     }
+
 }

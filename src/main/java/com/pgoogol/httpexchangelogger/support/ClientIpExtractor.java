@@ -5,4 +5,5 @@ import jakarta.servlet.http.HttpServletRequest;
 public interface ClientIpExtractor {
 
     String extract(HttpServletRequest request);
+
 }

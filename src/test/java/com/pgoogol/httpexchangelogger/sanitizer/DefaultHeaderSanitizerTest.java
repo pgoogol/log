@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DefaultHeaderSanitizerTest {
 
     private DefaultHeaderSanitizer sanitizerWithFields(List<String> fields, boolean enabled) {
+
         HttpExchangeLoggerProperties.Mask mask = new HttpExchangeLoggerProperties.Mask();
         mask.setEnabled(enabled);
         mask.setFields(fields);
@@ -20,6 +21,7 @@ class DefaultHeaderSanitizerTest {
 
     @Test
     void masksDefaultSensitiveHeadersEvenWhenNotInList() {
+
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of(), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));
@@ -37,6 +39,7 @@ class DefaultHeaderSanitizerTest {
 
     @Test
     void caseInsensitiveHeaderMatching() {
+
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-trace"), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("AUTHORIZATION", List.of("Bearer secret"));
@@ -50,6 +53,7 @@ class DefaultHeaderSanitizerTest {
 
     @Test
     void masksAllValuesForMultiValueHeaders() {
+
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of(), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Set-Cookie", List.of("a=1", "b=2"));
@@ -61,6 +65,7 @@ class DefaultHeaderSanitizerTest {
 
     @Test
     void stillMasksBuiltInCredentialHeadersWhenMaskingDisabled() {
+
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-custom"), false);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));
@@ -73,4 +78,5 @@ class DefaultHeaderSanitizerTest {
         // ...but extra configured header names are only masked when masking is enabled.
         assertThat(result.get("X-Custom")).containsExactly("value");
     }
+
 }

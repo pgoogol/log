@@ -14,6 +14,7 @@ class HttpExchangeLoggerPropertiesTest {
 
     @Test
     void hasReasonableDefaults() {
+
         runner.run(ctx -> {
             HttpExchangeLoggerProperties props = ctx.getBean(HttpExchangeLoggerProperties.class);
             assertThat(props.isEnabled()).isTrue();
@@ -35,6 +36,7 @@ class HttpExchangeLoggerPropertiesTest {
 
     @Test
     void bindsYamlConfiguration() {
+
         runner.withPropertyValues(
                 "http-exchange-logger.enabled=true",
                 "http-exchange-logger.default-mode=LIMITED",
@@ -72,4 +74,5 @@ class HttpExchangeLoggerPropertiesTest {
             assertThat(props.getEndpoints().get(1).getMode()).isEqualTo(HttpLogMode.OFF);
         });
     }
+
 }

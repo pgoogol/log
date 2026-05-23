@@ -6,5 +6,7 @@ public class NoopHttpExchangeLogSink implements HttpExchangeLogSink {
 
     @Override
     public void log(HttpExchangeLogEvent event) {
+
     }
+
 }
