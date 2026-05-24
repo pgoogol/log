@@ -29,46 +29,60 @@ class EndpointLoggingModeResolverTest {
     }
 
     @Test
-    void usesDefaultModeWhenNoRulesMatch() {
+    void resolve_whenNoRulesMatch_returnsDefaultMode() {
 
+        // given
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, new ArrayList<>());
 
-        assertThat(resolver.resolve("/api/anything")).isEqualTo(HttpLogMode.BASIC);
+        // when
+        HttpLogMode mode = resolver.resolve("/api/anything");
+
+        // then
+        assertThat(mode).isEqualTo(HttpLogMode.BASIC);
     }
 
     @Test
-    void firstMatchingRuleWins() {
+    void resolve_whenMultipleRulesMatch_returnsFirstMatchingMode() {
 
+        // given
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
                 rule("/api/orders/**", HttpLogMode.FULL),
                 rule("/api/**", HttpLogMode.LIMITED)
         ));
 
+        // when / then
         assertThat(resolver.resolve("/api/orders/123")).isEqualTo(HttpLogMode.FULL);
         assertThat(resolver.resolve("/api/products")).isEqualTo(HttpLogMode.LIMITED);
     }
 
     @Test
-    void offRuleDisablesLogging() {
+    void resolve_whenOffRuleMatches_returnsOffMode() {
 
+        // given
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.FULL, List.of(
                 rule("/actuator/**", HttpLogMode.OFF)
         ));
 
+        // when / then
         assertThat(resolver.resolve("/actuator/health")).isEqualTo(HttpLogMode.OFF);
         assertThat(resolver.resolve("/api/orders")).isEqualTo(HttpLogMode.FULL);
     }
 
     @Test
-    void ignoresRulesMissingPatternOrMode() {
+    void resolve_whenRulesMissingPatternOrMode_ignoresThemAndUsesValidRule() {
 
+        // given
         EndpointLoggingModeResolver resolver = resolverWithRules(HttpLogMode.BASIC, List.of(
                 rule(null, HttpLogMode.FULL),
                 rule("/api/**", null),
                 rule("/api/orders/**", HttpLogMode.FULL)
         ));
 
-        assertThat(resolver.resolve("/api/orders/9")).isEqualTo(HttpLogMode.FULL);
+        // when
+        HttpLogMode mode = resolver.resolve("/api/orders/9");
+
+        // then
+        assertThat(mode).isEqualTo(HttpLogMode.FULL);
     }
 
 }

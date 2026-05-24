@@ -36,20 +36,12 @@ public class EndpointLoggingModeResolver {
             return properties.getDefaultMode();
         }
 
-        for (HttpExchangeLoggerProperties.Endpoint rule : properties.getEndpoints()) {
-            String rulePattern = rule.getPattern();
-            HttpLogMode ruleMode = rule.getMode();
-            if (Objects.isNull(rulePattern) || Objects.isNull(ruleMode)) {
-
-                continue;
-            }
-            if (pathMatcher.match(rulePattern, path)) {
-
-                return ruleMode;
-            }
-        }
-
-        return properties.getDefaultMode();
+        return properties.getEndpoints().stream()
+                .filter(rule -> Objects.nonNull(rule.getPattern()) && Objects.nonNull(rule.getMode()))
+                .filter(rule -> pathMatcher.match(rule.getPattern(), path))
+                .map(HttpExchangeLoggerProperties.Endpoint::getMode)
+                .findFirst()
+                .orElseGet(properties::getDefaultMode);
     }
 
 }

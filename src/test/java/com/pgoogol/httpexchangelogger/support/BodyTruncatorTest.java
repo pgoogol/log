@@ -7,37 +7,54 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BodyTruncatorTest {
 
     @Test
-    void doesNotTruncateBelowLimit() {
+    void truncate_whenBodyBelowLimit_returnsUntruncated() {
 
-        BodyTruncator.TruncationResult result = BodyTruncator.truncate("hello", 10);
+        // given
+        String body = "hello";
 
+        // when
+        BodyTruncator.TruncationResult result = BodyTruncator.truncate(body, 10);
+
+        // then
         assertThat(result.value()).isEqualTo("hello");
         assertThat(result.truncated()).isFalse();
     }
 
     @Test
-    void truncatesAtLimit() {
+    void truncate_whenBodyExceedsLimit_returnsTruncatedAtLimit() {
 
-        BodyTruncator.TruncationResult result = BodyTruncator.truncate("hello world", 5);
+        // given
+        String body = "hello world";
 
+        // when
+        BodyTruncator.TruncationResult result = BodyTruncator.truncate(body, 5);
+
+        // then
         assertThat(result.value()).isEqualTo("hello");
         assertThat(result.truncated()).isTrue();
     }
 
     @Test
-    void handlesNullBody() {
+    void truncate_whenBodyIsNull_returnsNullUntruncated() {
 
+        // when
         BodyTruncator.TruncationResult result = BodyTruncator.truncate(null, 5);
 
+        // then
         assertThat(result.value()).isNull();
         assertThat(result.truncated()).isFalse();
     }
 
     @Test
-    void handlesZeroLimit() {
+    void truncate_whenLimitIsZero_returnsEmptyTruncated() {
 
-        BodyTruncator.TruncationResult result = BodyTruncator.truncate("abc", 0);
+        // given
+        String body = "abc";
 
+        // when
+        BodyTruncator.TruncationResult result = BodyTruncator.truncate(body, 0);
+
+        // then
         assertThat(result.value()).isEmpty();
         assertThat(result.truncated()).isTrue();
     }

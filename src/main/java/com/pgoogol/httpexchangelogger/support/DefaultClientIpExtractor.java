@@ -2,7 +2,9 @@ package com.pgoogol.httpexchangelogger.support;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.util.Arrays;
 import java.util.Objects;
+import java.util.Optional;
 
 public class DefaultClientIpExtractor implements ClientIpExtractor {
 
@@ -20,13 +22,13 @@ public class DefaultClientIpExtractor implements ClientIpExtractor {
         String forwarded = request.getHeader(X_FORWARDED_FOR);
         if (Objects.nonNull(forwarded) && !forwarded.isBlank()) {
 
-            for (String segment : forwarded.split(",")) {
+            Optional<String> forwardedClient = Arrays.stream(forwarded.split(","))
+                    .map(String::trim)
+                    .filter(candidate -> !candidate.isEmpty() && !candidate.equalsIgnoreCase("unknown"))
+                    .findFirst();
+            if (forwardedClient.isPresent()) {
 
-                String candidate = segment.trim();
-                if (!candidate.isEmpty() && !candidate.equalsIgnoreCase("unknown")) {
-
-                    return candidate;
-                }
+                return forwardedClient.get();
             }
         }
 

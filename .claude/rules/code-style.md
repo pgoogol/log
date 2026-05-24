@@ -31,7 +31,7 @@
 
 ## Loops & chaining
 - Avoid plain `for` loops (both indexed `for (int i …)` and enhanced `for (x : xs)`) — prefer `Stream` / `forEach` / declarative constructs, **unless** a plain loop is genuinely cheaper in time or complexity (then a `for` is fine, and say why)
-- Avoid long call / stream chains — break them into readable steps with intermediate variables rather than one long fluent chain
+- Avoid chained calls like `a().b().c()` — unless using a Builder, `Optional`, `Stream`, or Mockito API
 
 ## Spring-specific
 - Use constructor injection only — never `@Autowired` on fields

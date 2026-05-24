@@ -36,26 +36,21 @@ public class DefaultHeaderSanitizer implements HeaderSanitizer {
         }
 
         Map<String, List<String>> result = new LinkedHashMap<>();
-        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-
-            String name = entry.getKey();
-            List<String> values = entry.getValue();
-
-            if (isSensitiveHeader(name)) {
-
-                result.put(name, maskAll(values));
-            } else {
-
-                if (Objects.isNull(values)) {
-
-                    result.put(name, Collections.emptyList());
-                } else {
-
-                    result.put(name, new ArrayList<>(values));
-                }
-            }
-        }
+        headers.forEach((name, values) -> result.put(name, sanitizeValues(name, values)));
         return result;
+    }
+
+    private List<String> sanitizeValues(String name, List<String> values) {
+
+        if (isSensitiveHeader(name)) {
+
+            return maskAll(values);
+        }
+        if (Objects.isNull(values)) {
+
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(values);
     }
 
     private boolean isSensitiveHeader(String name) {

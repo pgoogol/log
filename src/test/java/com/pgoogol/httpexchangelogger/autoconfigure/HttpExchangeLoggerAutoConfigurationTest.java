@@ -29,8 +29,9 @@ class HttpExchangeLoggerAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(HttpExchangeLoggerAutoConfiguration.class));
 
     @Test
-    void registersAllExpectedBeansByDefault() {
+    void autoConfiguration_whenDefaults_registersAllExpectedBeans() {
 
+        // given / when / then
         webRunner.run(ctx -> {
             assertThat(ctx).hasSingleBean(HttpExchangeLoggerProperties.class);
             assertThat(ctx).hasSingleBean(EndpointLoggingModeResolver.class);
@@ -50,8 +51,9 @@ class HttpExchangeLoggerAutoConfigurationTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void registersFilterViaFilterRegistrationBeanWithOrder() {
+    void autoConfiguration_whenDefaults_registersFilterViaFilterRegistrationBeanWithOrder() {
 
+        // given / when / then
         webRunner.run(ctx -> {
             assertThat(ctx).hasSingleBean(FilterRegistrationBean.class);
             FilterRegistrationBean<HttpExchangeLoggingFilter> registration =
@@ -63,10 +65,13 @@ class HttpExchangeLoggerAutoConfigurationTest {
     }
 
     @Test
-    void filterOrderIsConfigurable() {
+    void autoConfiguration_whenFilterOrderPropertySet_usesConfiguredOrder() {
 
+        // given
         webRunner.withPropertyValues("http-exchange-logger.filter-order=42")
+                // when
                 .run(ctx -> {
+                    // then
                     @SuppressWarnings("unchecked")
                     FilterRegistrationBean<HttpExchangeLoggingFilter> registration =
                             ctx.getBean(FilterRegistrationBean.class);
@@ -75,31 +80,38 @@ class HttpExchangeLoggerAutoConfigurationTest {
     }
 
     @Test
-    void usesNoopSinkWhenConsoleDisabled() {
+    void autoConfiguration_whenConsoleSinkDisabled_registersNoopSink() {
 
+        // given
         webRunner.withPropertyValues(
                 "http-exchange-logger.sink.console=false",
                 "http-exchange-logger.sink.file=true",
                 "http-exchange-logger.sink.observability=true"
+        // when
         ).run(ctx -> {
+            // then
             HttpExchangeLogSink sink = ctx.getBean(HttpExchangeLogSink.class);
             assertThat(sink).isInstanceOf(NoopHttpExchangeLogSink.class);
         });
     }
 
     @Test
-    void doesNotConfigureFilterWhenNonWebApplication() {
+    void autoConfiguration_whenNonWebApplication_doesNotRegisterFilter() {
 
+        // given / when / then
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(HttpExchangeLoggerAutoConfiguration.class))
                 .run(ctx -> assertThat(ctx).doesNotHaveBean(HttpExchangeLoggingFilter.class));
     }
 
     @Test
-    void backsOffWhenUserProvidesSink() {
+    void autoConfiguration_whenUserProvidesSink_backsOff() {
 
+        // given
         webRunner.withUserConfiguration(CustomSinkConfig.class)
+                // when
                 .run(ctx -> {
+                    // then
                     HttpExchangeLogSink sink = ctx.getBean(HttpExchangeLogSink.class);
                     assertThat(sink).isInstanceOf(CustomSink.class);
                 });

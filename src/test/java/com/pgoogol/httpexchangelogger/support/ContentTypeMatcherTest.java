@@ -7,8 +7,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ContentTypeMatcherTest {
 
     @Test
-    void recognizesJsonAndVariants() {
+    void isJson_whenJsonOrVendorVariant_returnsTrueOtherwiseFalse() {
 
+        // expect
         assertThat(ContentTypeMatcher.isJson("application/json")).isTrue();
         assertThat(ContentTypeMatcher.isJson("application/json;charset=UTF-8")).isTrue();
         assertThat(ContentTypeMatcher.isJson("application/hal+json")).isTrue();
@@ -17,32 +18,36 @@ class ContentTypeMatcherTest {
     }
 
     @Test
-    void recognizesXmlAndVariants() {
+    void isXml_whenXmlOrVendorVariant_returnsTrueOtherwiseFalse() {
 
+        // expect
         assertThat(ContentTypeMatcher.isXml("application/xml")).isTrue();
         assertThat(ContentTypeMatcher.isXml("application/atom+xml")).isTrue();
         assertThat(ContentTypeMatcher.isXml("text/xml")).isFalse();
     }
 
     @Test
-    void recognizesTextTypes() {
+    void isText_whenTextType_returnsTrueOtherwiseFalse() {
 
+        // expect
         assertThat(ContentTypeMatcher.isText("text/plain")).isTrue();
         assertThat(ContentTypeMatcher.isText("text/html;charset=utf-8")).isTrue();
         assertThat(ContentTypeMatcher.isText("application/json")).isFalse();
     }
 
     @Test
-    void recognizesFormUrlEncoded() {
+    void isFormUrlEncoded_whenFormUrlEncodedType_returnsTrueOtherwiseFalse() {
 
+        // expect
         assertThat(ContentTypeMatcher.isFormUrlEncoded("application/x-www-form-urlencoded")).isTrue();
         assertThat(ContentTypeMatcher.isFormUrlEncoded("application/x-www-form-urlencoded;charset=utf-8")).isTrue();
         assertThat(ContentTypeMatcher.isFormUrlEncoded("application/json")).isFalse();
     }
 
     @Test
-    void detectsBinaryAndMultipart() {
+    void isBinary_whenBinaryOrMultipartType_returnsTrueOtherwiseFalse() {
 
+        // expect
         assertThat(ContentTypeMatcher.isBinary("multipart/form-data;boundary=x")).isTrue();
         assertThat(ContentTypeMatcher.isBinary("application/octet-stream")).isTrue();
         assertThat(ContentTypeMatcher.isBinary("image/png")).isTrue();
@@ -54,8 +59,9 @@ class ContentTypeMatcherTest {
     }
 
     @Test
-    void isLoggableForTextualTypes() {
+    void isLoggable_whenTextualType_returnsTrueForBinaryReturnsFalse() {
 
+        // expect
         assertThat(ContentTypeMatcher.isLoggable("application/json")).isTrue();
         assertThat(ContentTypeMatcher.isLoggable("application/xml")).isTrue();
         assertThat(ContentTypeMatcher.isLoggable("text/plain")).isTrue();
@@ -66,8 +72,9 @@ class ContentTypeMatcherTest {
     }
 
     @Test
-    void toleratesWhitespaceBeforeParameterSeparator() {
+    void isJson_whenWhitespaceBeforeParameterSeparator_stillMatchesBaseType() {
 
+        // expect
         assertThat(ContentTypeMatcher.isJson("application/json ; charset=utf-8")).isTrue();
         assertThat(ContentTypeMatcher.isLoggable("application/json ; charset=utf-8")).isTrue();
         assertThat(ContentTypeMatcher.isXml("application/xml ; charset=utf-8")).isTrue();
@@ -75,8 +82,9 @@ class ContentTypeMatcherTest {
     }
 
     @Test
-    void detectsParameterizedBinaryTypes() {
+    void isBinary_whenBinaryTypeHasParameters_stillMatchesBaseType() {
 
+        // expect
         assertThat(ContentTypeMatcher.isBinary("application/pdf; name=a")).isTrue();
         assertThat(ContentTypeMatcher.isBinary("application/octet-stream;charset=binary")).isTrue();
         assertThat(ContentTypeMatcher.isBinary("application/zip ; x")).isTrue();

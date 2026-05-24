@@ -70,14 +70,16 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void basicModeOnlyLogsMetadata() throws Exception {
+    void doFilter_whenModeBasic_logsOnlyMetadata() throws Exception {
 
+        // given / when
         MvcResult result = mockMvc().perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"password\":\"secret\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
 
+        // then
         assertThat(result.getResponse().getContentAsString()).contains("fake-token");
 
         HttpExchangeLogEvent event = sink.last();
@@ -93,28 +95,33 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void offModeSkipsLogging() throws Exception {
+    void doFilter_whenModeOff_skipsLogging() throws Exception {
 
+        // given / when
         mockMvc().perform(get("/actuator/health"))
                 .andExpect(status().isOk());
 
+        // then
         assertThat(sink.getEvents()).isEmpty();
     }
 
     @Test
-    void offModeStillSetsRequestIdHeader() throws Exception {
+    void doFilter_whenModeOff_stillSetsRequestIdHeader() throws Exception {
 
+        // given / when
         MvcResult result = mockMvc().perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andReturn();
 
+        // then
         assertThat(sink.getEvents()).isEmpty();
         assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
     }
 
     @Test
-    void fullModeIncludesBodiesAndMasksSensitiveFields() throws Exception {
+    void doFilter_whenModeFull_includesBodiesAndMasksSensitiveFields() throws Exception {
 
+        // given / when
         MvcResult result = mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer my-token")
@@ -122,6 +129,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
+        // then
         assertThat(result.getResponse().getContentAsString()).contains("ord_456");
 
         HttpExchangeLogEvent event = sink.last();
@@ -137,48 +145,58 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void doesNotLeakSecretsWhenBodyIsTruncated() throws Exception {
+    void doFilter_whenSecretSitsPastMaxBodyLength_doesNotLeakSecret() throws Exception {
+
+        // given
         // A large JSON body whose secret sits past max-body-length must still be masked,
         // never echoed raw because truncation produced invalid JSON.
         String body = "{\"password\":\"hunter2\",\"filler\":\"%s\"}".formatted("x".repeat(500));
 
+        // when
         mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk());
 
+        // then
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getRequestBody().toString()).doesNotContain("hunter2");
     }
 
     @Test
-    void truncatesBodyOverMaxLength() throws Exception {
+    void doFilter_whenBodyExceedsMaxLength_marksRequestBodyTruncated() throws Exception {
 
+        // given
         String big = "{\"data\":\"%s\"}".formatted("x".repeat(500));
 
+        // when
         mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(big))
                 .andExpect(status().isOk());
 
+        // then
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.isRequestBodyTruncated()).isTrue();
     }
 
     @Test
-    void includesQueryStringForLimitedAndFullModes() throws Exception {
+    void doFilter_whenRequestHasQueryString_capturesPathAndQueryString() throws Exception {
 
+        // given / when
         mockMvc().perform(get("/api/orders/123?source=mobile"))
                 .andExpect(status().isOk());
 
+        // then
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getPath()).isEqualTo("/api/orders/123");
         assertThat(event.getQueryString()).isEqualTo("source=mobile");
     }
 
     @Test
-    void capturesExceptionAndStillLogs() throws Exception {
+    void doFilter_whenHandlerThrows_capturesExceptionAndStillLogs() throws Exception {
 
+        // given / when
         try {
 
             mockMvc().perform(get("/api/boom"));
@@ -187,6 +205,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
             // exception is propagated by MockMvc / dispatcher
         }
 
+        // then
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getExceptionClass()).isEqualTo(IllegalStateException.class.getName());
         assertThat(event.getExceptionMessage()).isEqualTo("Cannot create order");
@@ -195,37 +214,43 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
-    void skipsBinaryContentTypes() throws Exception {
+    void doFilter_whenContentTypeIsBinary_doesNotLogBodies() throws Exception {
 
+        // given / when
         mockMvc().perform(post("/api/binary")
                         .contentType(MediaType.APPLICATION_OCTET_STREAM)
                         .content(new byte[]{1, 2, 3}))
                 .andExpect(status().isOk())
                 .andExpect(content().bytes(new byte[]{1, 2, 3}));
 
+        // then
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getRequestBody()).asString().contains("not logged");
         assertThat(event.getResponseBody()).asString().contains("not logged");
     }
 
     @Test
-    void responseBodyStillReachesClient() throws Exception {
+    void doFilter_whenResponseHasBody_stillReachesClient() throws Exception {
 
+        // given / when
         MvcResult result = mockMvc().perform(get("/api/orders/123?source=mobile"))
                 .andExpect(status().isOk())
                 .andReturn();
 
+        // then
         assertThat(result.getResponse().getContentAsString()).contains("\"orderId\":\"123\"");
         assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
     }
 
     @Test
-    void honorsIncomingRequestIdHeader() throws Exception {
+    void doFilter_whenIncomingRequestIdHeaderPresent_honorsIt() throws Exception {
 
+        // given / when
         MvcResult result = mockMvc().perform(get("/api/orders/123").header("X-Request-Id", "external-id"))
                 .andExpect(status().isOk())
                 .andReturn();
 
+        // then
         assertThat(result.getResponse().getHeader("X-Request-Id")).isEqualTo("external-id");
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getRequestId()).isEqualTo("external-id");

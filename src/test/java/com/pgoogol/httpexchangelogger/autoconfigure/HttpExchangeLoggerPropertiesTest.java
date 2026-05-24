@@ -13,8 +13,9 @@ class HttpExchangeLoggerPropertiesTest {
             .withConfiguration(AutoConfigurations.of(HttpExchangeLoggerAutoConfiguration.class));
 
     @Test
-    void hasReasonableDefaults() {
+    void properties_whenNoOverrides_bindReasonableDefaults() {
 
+        // given / when / then
         runner.run(ctx -> {
             HttpExchangeLoggerProperties props = ctx.getBean(HttpExchangeLoggerProperties.class);
             assertThat(props.isEnabled()).isTrue();
@@ -35,8 +36,9 @@ class HttpExchangeLoggerPropertiesTest {
     }
 
     @Test
-    void bindsYamlConfiguration() {
+    void properties_whenOverridesProvided_bindConfiguredValues() {
 
+        // given
         runner.withPropertyValues(
                 "http-exchange-logger.enabled=true",
                 "http-exchange-logger.default-mode=LIMITED",
@@ -54,7 +56,9 @@ class HttpExchangeLoggerPropertiesTest {
                 "http-exchange-logger.endpoints[0].mode=FULL",
                 "http-exchange-logger.endpoints[1].pattern=/actuator/**",
                 "http-exchange-logger.endpoints[1].mode=OFF"
+        // when
         ).run(ctx -> {
+            // then
             HttpExchangeLoggerProperties props = ctx.getBean(HttpExchangeLoggerProperties.class);
             assertThat(props.getDefaultMode()).isEqualTo(HttpLogMode.LIMITED);
             assertThat(props.isRequireTtlForFullLogging()).isTrue();

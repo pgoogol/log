@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -185,49 +186,46 @@ public class HttpExchangeLogEventFactory {
 
     private Map<String, List<String>> extractRequestHeaders(HttpServletRequest request) {
 
-        Map<String, List<String>> headers = new LinkedHashMap<>();
-        java.util.Enumeration<String> names = request.getHeaderNames();
+        Enumeration<String> names = request.getHeaderNames();
         if (Objects.isNull(names)) {
 
             return Collections.emptyMap();
         }
-        while (names.hasMoreElements()) {
-
-            String name = names.nextElement();
-            java.util.Enumeration<String> values = request.getHeaders(name);
-            List<String> list = new ArrayList<>();
-            if (Objects.nonNull(values)) {
-
-                while (values.hasMoreElements()) {
-
-                    list.add(values.nextElement());
-                }
-            }
-            headers.put(name, list);
-        }
+        Map<String, List<String>> headers = new LinkedHashMap<>();
+        Collections.list(names).forEach(name -> headers.put(name, requestHeaderValues(request, name)));
         return headers;
+    }
+
+    private List<String> requestHeaderValues(HttpServletRequest request, String name) {
+
+        Enumeration<String> values = request.getHeaders(name);
+        if (Objects.isNull(values)) {
+
+            return Collections.emptyList();
+        }
+        return Collections.list(values);
     }
 
     private Map<String, List<String>> extractResponseHeaders(HttpServletResponse response) {
 
-        Map<String, List<String>> headers = new LinkedHashMap<>();
         Collection<String> names = response.getHeaderNames();
         if (Objects.isNull(names)) {
 
             return Collections.emptyMap();
         }
-        for (String name : names) {
-
-            Collection<String> values = response.getHeaders(name);
-            if (Objects.isNull(values)) {
-
-                headers.put(name, Collections.emptyList());
-            } else {
-
-                headers.put(name, new ArrayList<>(values));
-            }
-        }
+        Map<String, List<String>> headers = new LinkedHashMap<>();
+        names.forEach(name -> headers.put(name, responseHeaderValues(response, name)));
         return headers;
+    }
+
+    private List<String> responseHeaderValues(HttpServletResponse response, String name) {
+
+        Collection<String> values = response.getHeaders(name);
+        if (Objects.isNull(values)) {
+
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(values);
     }
 
     private Map<String, List<String>> sanitizeHeaders(Map<String, List<String>> headers) {

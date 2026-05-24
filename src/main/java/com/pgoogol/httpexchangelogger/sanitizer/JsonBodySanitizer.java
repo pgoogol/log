@@ -8,7 +8,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -75,25 +74,8 @@ public class JsonBodySanitizer implements BodySanitizer {
         if (node.isObject()) {
 
             ObjectNode object = (ObjectNode) node;
-            List<String> names = new ArrayList<>();
-            for (Map.Entry<String, JsonNode> entry : object.properties()) {
-
-                names.add(entry.getKey());
-            }
-            for (String name : names) {
-
-                if (masker.isSensitive(name)) {
-
-                    object.put(name, SensitiveValueMasker.MASK);
-                } else {
-
-                    JsonNode value = object.get(name);
-                    if (Objects.nonNull(value) && (value.isObject() || value.isArray())) {
-
-                        mask(value);
-                    }
-                }
-            }
+            List<String> names = object.properties().stream().map(Map.Entry::getKey).toList();
+            names.forEach(name -> maskProperty(object, name));
             return object;
         }
         if (node.isArray()) {
@@ -106,6 +88,20 @@ public class JsonBodySanitizer implements BodySanitizer {
             return array;
         }
         return node;
+    }
+
+    private void maskProperty(ObjectNode object, String name) {
+
+        if (masker.isSensitive(name)) {
+
+            object.put(name, SensitiveValueMasker.MASK);
+            return;
+        }
+        JsonNode value = object.get(name);
+        if (Objects.nonNull(value) && (value.isObject() || value.isArray())) {
+
+            mask(value);
+        }
     }
 
 }

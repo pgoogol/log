@@ -27,15 +27,17 @@ public class CompositeHttpExchangeLogSink implements HttpExchangeLogSink {
     @Override
     public void log(HttpExchangeLogEvent event) {
 
-        for (HttpExchangeLogSink delegate : delegates) {
+        delegates.forEach(delegate -> emit(delegate, event));
+    }
 
-            try {
+    private void emit(HttpExchangeLogSink delegate, HttpExchangeLogEvent event) {
 
-                delegate.log(event);
-            } catch (RuntimeException ex) {
+        try {
 
-                LOG.warn("HTTP exchange log sink {} failed to emit event", delegate.getClass().getName(), ex);
-            }
+            delegate.log(event);
+        } catch (RuntimeException ex) {
+
+            LOG.warn("HTTP exchange log sink {} failed to emit event", delegate.getClass().getName(), ex);
         }
     }
 

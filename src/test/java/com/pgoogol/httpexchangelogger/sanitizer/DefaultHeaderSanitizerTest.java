@@ -20,8 +20,9 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void masksDefaultSensitiveHeadersEvenWhenNotInList() {
+    void sanitize_whenHeaderIsBuiltInSensitive_masksEvenWhenNotInConfiguredList() {
 
+        // given
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of(), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));
@@ -29,8 +30,10 @@ class DefaultHeaderSanitizerTest {
         headers.put("X-Api-Key", List.of("key1"));
         headers.put("Content-Type", List.of("application/json"));
 
+        // when
         Map<String, List<String>> result = sanitizer.sanitize(headers);
 
+        // then
         assertThat(result.get("Authorization")).containsExactly("***");
         assertThat(result.get("Cookie")).containsExactly("***");
         assertThat(result.get("X-Api-Key")).containsExactly("***");
@@ -38,41 +41,50 @@ class DefaultHeaderSanitizerTest {
     }
 
     @Test
-    void caseInsensitiveHeaderMatching() {
+    void sanitize_whenHeaderNamesDifferInCase_masksCaseInsensitively() {
 
+        // given
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-trace"), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("AUTHORIZATION", List.of("Bearer secret"));
         headers.put("X-Trace", List.of("trace-id"));
 
+        // when
         Map<String, List<String>> result = sanitizer.sanitize(headers);
 
+        // then
         assertThat(result.get("AUTHORIZATION")).containsExactly("***");
         assertThat(result.get("X-Trace")).containsExactly("***");
     }
 
     @Test
-    void masksAllValuesForMultiValueHeaders() {
+    void sanitize_whenHeaderHasMultipleValues_masksAllValues() {
 
+        // given
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of(), true);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Set-Cookie", List.of("a=1", "b=2"));
 
+        // when
         Map<String, List<String>> result = sanitizer.sanitize(headers);
 
+        // then
         assertThat(result.get("Set-Cookie")).containsExactly("***", "***");
     }
 
     @Test
-    void stillMasksBuiltInCredentialHeadersWhenMaskingDisabled() {
+    void sanitize_whenMaskingDisabled_stillMasksBuiltInCredentialHeadersButNotConfiguredOnes() {
 
+        // given
         DefaultHeaderSanitizer sanitizer = sanitizerWithFields(List.of("x-custom"), false);
         Map<String, List<String>> headers = new LinkedHashMap<>();
         headers.put("Authorization", List.of("Bearer secret"));
         headers.put("X-Custom", List.of("value"));
 
+        // when
         Map<String, List<String>> result = sanitizer.sanitize(headers);
 
+        // then
         // Built-in credential headers are always masked, even with masking disabled...
         assertThat(result.get("Authorization")).containsExactly("***");
         // ...but extra configured header names are only masked when masking is enabled.
