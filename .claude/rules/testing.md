@@ -22,6 +22,7 @@ by `// given`, `// when`, `// then` comments (or blank lines):
 ```java
 @Test
 void createOrder_whenItemOutOfStock_throwsInsufficientStockException() {
+    
     // given
     var request = OrderFixtures.outOfStockRequest();
 
