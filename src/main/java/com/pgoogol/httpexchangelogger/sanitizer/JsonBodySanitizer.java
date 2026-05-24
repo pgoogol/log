@@ -8,9 +8,9 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 public class JsonBodySanitizer implements BodySanitizer {
@@ -74,8 +74,11 @@ public class JsonBodySanitizer implements BodySanitizer {
         if (node.isObject()) {
 
             ObjectNode object = (ObjectNode) node;
-            List<String> names = object.properties().stream().map(Map.Entry::getKey).toList();
-            names.forEach(name -> maskProperty(object, name));
+            Set<Map.Entry<String, JsonNode>> properties = object.properties();
+            properties.stream()
+                    .map(Map.Entry::getKey)
+                    .toList()
+                    .forEach(name -> maskProperty(object, name));
             return object;
         }
         if (node.isArray()) {
