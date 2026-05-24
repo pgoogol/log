@@ -10,10 +10,27 @@
 
 ## Naming convention
 ```
-[MethodUnderTest]_[Scenario]_[ExpectedResult]
+[methodUnderTest]_[whatItDoes]_[expectedResult]
 
 createOrder_whenItemOutOfStock_throwsInsufficientStockException
 findById_whenUserExists_returnsUserResponse
+```
+
+## Test structure
+Structure every test body in explicit **given / when / then** sections, separated
+by `// given`, `// when`, `// then` comments (or blank lines):
+```java
+@Test
+void createOrder_whenItemOutOfStock_throwsInsufficientStockException() {
+    // given
+    var request = OrderFixtures.outOfStockRequest();
+
+    // when
+    var thrown = catchThrowable(() -> service.createOrder(request));
+
+    // then
+    assertThat(thrown).isInstanceOf(InsufficientStockException.class);
+}
 ```
 
 ## Unit test rules

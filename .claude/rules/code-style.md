@@ -5,7 +5,7 @@
 - Use **sealed classes** for domain result types (e.g. `Success | Failure | NotFound`)
 - Use **pattern matching** (`instanceof`, `switch`) instead of cascaded if-else
 - Use **virtual threads** (`Executors.newVirtualThreadPerTaskExecutor()`) for blocking I/O tasks
-- Prefer `var` for local variables where the type is obvious from the right-hand side
+- **Do not use `var`** — always declare the explicit type for local variables
 - Use text blocks for multi-line SQL, JSON, and HTML strings
 
 ## Naming
@@ -28,6 +28,10 @@
 - No `null` returns from public methods — use `Optional<T>` or throw a typed exception
 - Prefer `List.of()`, `Map.of()`, `Set.of()` for immutable collections
 - Always use `@NonNull` / `@Nullable` (from `org.springframework.lang`) on method parameters and return types
+
+## Loops & chaining
+- Avoid plain `for` loops (both indexed `for (int i …)` and enhanced `for (x : xs)`) — prefer `Stream` / `forEach` / declarative constructs, **unless** a plain loop is genuinely cheaper in time or complexity (then a `for` is fine, and say why)
+- Avoid long call / stream chains — break them into readable steps with intermediate variables rather than one long fluent chain
 
 ## Spring-specific
 - Use constructor injection only — never `@Autowired` on fields
@@ -76,4 +80,5 @@ boolean hasRole = CollectionUtils.containsAny(roles, allowed);
 ## Formatting
 - 4-space indentation (no tabs)
 - Opening brace on the same line
+- Leave one blank line after an opening brace `{` that starts a class or method body
 - Enforce with Checkstyle or Spotless (`./mvnw spotless:check`)
