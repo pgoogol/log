@@ -113,14 +113,32 @@ public class HttpExchangeLogEventFactory {
 
     private void applyRequestBody(HttpServletRequest request, byte[] requestBody, HttpExchangeLogEvent.Builder builder) {
 
+        String contentType = request.getContentType();
         String body = BodyExtractor.toBodyString(requestBody, request.getCharacterEncoding());
-        BodyResult result = buildBody(body, request.getContentType());
+        // Only bounded textual request bodies are captured. When the request carried a body of an
+        // unloggable type (binary, multipart) it is never read, so emit the same placeholder the
+        // response path would instead of silently dropping it.
+        if (Objects.isNull(body) && carriesUnloggableBody(request, contentType)) {
+
+            builder.requestBody(notLogged(contentType));
+            return;
+        }
+        BodyResult result = buildBody(body, contentType);
         if (Objects.isNull(result)) {
 
             return;
         }
         builder.requestBody(result.value());
         builder.requestBodyTruncated(result.truncated());
+    }
+
+    private boolean carriesUnloggableBody(HttpServletRequest request, String contentType) {
+
+        if (request.getContentLengthLong() <= 0 || Objects.isNull(contentType)) {
+
+            return false;
+        }
+        return ContentTypeMatcher.isBinary(contentType) || !ContentTypeMatcher.isLoggable(contentType);
     }
 
     private void applyResponseBody(ContentCachingResponseWrapper response, HttpExchangeLogEvent.Builder builder) {
