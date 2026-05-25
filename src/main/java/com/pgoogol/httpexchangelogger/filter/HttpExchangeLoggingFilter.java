@@ -17,7 +17,6 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
@@ -87,20 +86,11 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
 
         // Eagerly buffer bounded textual bodies so they are logged even when the handler never
-        // reads them; everything else falls back to read-through caching (form params, multipart,
-        // large or unknown-length bodies) to avoid breaking the application or buffering uploads.
-        CachedBodyHttpServletRequest cachedRequest = null;
-        ContentCachingRequestWrapper contentCachingRequest = null;
-        HttpServletRequest requestToUse;
-        if (shouldBufferEagerly(request, cacheLimit)) {
-
-            cachedRequest = new CachedBodyHttpServletRequest(request);
-            requestToUse = cachedRequest;
-        } else {
-
-            contentCachingRequest = new ContentCachingRequestWrapper(request, cacheLimit);
-            requestToUse = contentCachingRequest;
-        }
+        // reads them. Everything else (form, multipart, binary, large or unknown-length bodies)
+        // passes through unwrapped and its body is not captured, to avoid buffering uploads.
+        CachedBodyHttpServletRequest cachedRequest =
+                shouldBufferEagerly(request, cacheLimit) ? new CachedBodyHttpServletRequest(request) : null;
+        HttpServletRequest requestToUse = Objects.requireNonNullElse(cachedRequest, request);
 
         long startedAt = System.nanoTime();
         Throwable exception = null;
@@ -117,9 +107,7 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
 
-                byte[] requestBody = Objects.nonNull(cachedRequest)
-                        ? cachedRequest.getCachedBody()
-                        : contentCachingRequest.getContentAsByteArray();
+                byte[] requestBody = Objects.nonNull(cachedRequest) ? cachedRequest.getCachedBody() : null;
                 HttpExchangeLogEvent event = eventFactory.create(
                         requestToUse,
                         requestBody,
