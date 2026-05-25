@@ -230,6 +230,21 @@ class HttpExchangeLoggingFilterIntegrationTest {
     }
 
     @Test
+    void doFilter_whenHandlerIgnoresRequestBody_stillLogsIt() throws Exception {
+
+        // given / when
+        mockMvc().perform(post("/api/ignore-body")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"p_1\"}"))
+                .andExpect(status().isOk());
+
+        // then
+        HttpExchangeLogEvent event = sink.last();
+        assertThat(event.getRequestBody()).isNotNull();
+        assertThat(event.getRequestBody().toString()).contains("p_1");
+    }
+
+    @Test
     void doFilter_whenResponseHasBody_stillReachesClient() throws Exception {
 
         // given / when

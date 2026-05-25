@@ -6,6 +6,8 @@ import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.support.CachedBodyHttpServletRequest;
+import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -81,18 +83,31 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             return;
         }
 
-        ContentCachingRequestWrapper wrappedRequest =
-                new ContentCachingRequestWrapper(request, resolveCacheLimit(properties.getMaxBodyLength()));
+        int cacheLimit = resolveCacheLimit(properties.getMaxBodyLength());
+        ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
 
-        ContentCachingResponseWrapper wrappedResponse =
-                new ContentCachingResponseWrapper(response);
+        // Eagerly buffer bounded textual bodies so they are logged even when the handler never
+        // reads them; everything else falls back to read-through caching (form params, multipart,
+        // large or unknown-length bodies) to avoid breaking the application or buffering uploads.
+        CachedBodyHttpServletRequest cachedRequest = null;
+        ContentCachingRequestWrapper contentCachingRequest = null;
+        HttpServletRequest requestToUse;
+        if (shouldBufferEagerly(request, cacheLimit)) {
+
+            cachedRequest = new CachedBodyHttpServletRequest(request);
+            requestToUse = cachedRequest;
+        } else {
+
+            contentCachingRequest = new ContentCachingRequestWrapper(request, cacheLimit);
+            requestToUse = contentCachingRequest;
+        }
 
         long startedAt = System.nanoTime();
         Throwable exception = null;
 
         try {
 
-            filterChain.doFilter(wrappedRequest, wrappedResponse);
+            filterChain.doFilter(requestToUse, wrappedResponse);
         } catch (ServletException | IOException | RuntimeException ex) {
 
             exception = ex;
@@ -102,8 +117,12 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
 
+                byte[] requestBody = Objects.nonNull(cachedRequest)
+                        ? cachedRequest.getCachedBody()
+                        : contentCachingRequest.getContentAsByteArray();
                 HttpExchangeLogEvent event = eventFactory.create(
-                        wrappedRequest,
+                        requestToUse,
+                        requestBody,
                         wrappedResponse,
                         mode,
                         requestId,
@@ -119,6 +138,24 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                 copyBodyToResponse(wrappedResponse, exception);
             }
         }
+    }
+
+    private boolean shouldBufferEagerly(HttpServletRequest request, int cacheLimit) {
+
+        if (properties.getMaxBodyLength() <= 0) {
+
+            return false;
+        }
+        String contentType = request.getContentType();
+        boolean textual = ContentTypeMatcher.isJson(contentType)
+                || ContentTypeMatcher.isXml(contentType)
+                || ContentTypeMatcher.isText(contentType);
+        if (!textual) {
+
+            return false;
+        }
+        long length = request.getContentLengthLong();
+        return length > 0 && length <= cacheLimit;
     }
 
     private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, Throwable inFlight)

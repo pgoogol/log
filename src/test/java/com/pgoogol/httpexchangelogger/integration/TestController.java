@@ -58,4 +58,11 @@ public class TestController {
         return payload;
     }
 
+    @PostMapping(value = "/api/ignore-body", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String ignoreBody() {
+
+        // Intentionally does not read the request body.
+        return "ok";
+    }
+
 }

@@ -14,7 +14,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import tools.jackson.databind.ObjectMapper;
 
@@ -61,7 +60,7 @@ public class HttpExchangeLogEventFactory {
         return current;
     }
 
-    public HttpExchangeLogEvent create(ContentCachingRequestWrapper request, ContentCachingResponseWrapper response, HttpLogMode mode, String requestId, long durationMs, Throwable exception) {
+    public HttpExchangeLogEvent create(HttpServletRequest request, byte[] requestBody, ContentCachingResponseWrapper response, HttpLogMode mode, String requestId, long durationMs, Throwable exception) {
 
         HttpExchangeLogEvent.Builder builder = HttpExchangeLogEvent.builder().requestId(requestId).method(request.getMethod()).path(request.getRequestURI()).status(resolveStatus(response, exception)).durationMs(durationMs).configuredMode(mode).effectiveMode(mode);
 
@@ -94,7 +93,7 @@ public class HttpExchangeLogEventFactory {
             builder.responseHeaders(sanitizeHeaders(extractResponseHeaders(response)));
         }
 
-        applyRequestBody(request, builder);
+        applyRequestBody(request, requestBody, builder);
         applyResponseBody(response, builder);
 
         return builder.build();
@@ -112,10 +111,10 @@ public class HttpExchangeLogEventFactory {
         return status;
     }
 
-    private void applyRequestBody(ContentCachingRequestWrapper request, HttpExchangeLogEvent.Builder builder) {
+    private void applyRequestBody(HttpServletRequest request, byte[] requestBody, HttpExchangeLogEvent.Builder builder) {
 
-        String contentType = request.getContentType();
-        BodyResult result = buildBody(BodyExtractor.extractRequestBody(request), contentType);
+        String body = BodyExtractor.toBodyString(requestBody, request.getCharacterEncoding());
+        BodyResult result = buildBody(body, request.getContentType());
         if (Objects.isNull(result)) {
 
             return;
@@ -126,8 +125,8 @@ public class HttpExchangeLogEventFactory {
 
     private void applyResponseBody(ContentCachingResponseWrapper response, HttpExchangeLogEvent.Builder builder) {
 
-        String contentType = response.getContentType();
-        BodyResult result = buildBody(BodyExtractor.extractResponseBody(response), contentType);
+        String body = BodyExtractor.toBodyString(response.getContentAsByteArray(), response.getCharacterEncoding());
+        BodyResult result = buildBody(body, response.getContentType());
         if (Objects.isNull(result)) {
 
             return;

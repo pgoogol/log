@@ -1,8 +1,5 @@
 package com.pgoogol.httpexchangelogger.support;
 
-import org.springframework.web.util.ContentCachingRequestWrapper;
-import org.springframework.web.util.ContentCachingResponseWrapper;
-
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -13,32 +10,13 @@ public final class BodyExtractor {
 
     }
 
-    public static String extractRequestBody(ContentCachingRequestWrapper request) {
+    public static String toBodyString(byte[] content, String encoding) {
 
-        if (Objects.isNull(request)) {
-
-            return null;
-        }
-        byte[] content = request.getContentAsByteArray();
         if (Objects.isNull(content) || content.length == 0) {
 
             return null;
         }
-        return new String(content, resolveCharset(request.getCharacterEncoding()));
-    }
-
-    public static String extractResponseBody(ContentCachingResponseWrapper response) {
-
-        if (Objects.isNull(response)) {
-
-            return null;
-        }
-        byte[] content = response.getContentAsByteArray();
-        if (Objects.isNull(content) || content.length == 0) {
-
-            return null;
-        }
-        return new String(content, resolveCharset(response.getCharacterEncoding()));
+        return new String(content, resolveCharset(encoding));
     }
 
     private static Charset resolveCharset(String encoding) {
@@ -55,5 +33,4 @@ public final class BodyExtractor {
             return StandardCharsets.UTF_8;
         }
     }
-
 }
