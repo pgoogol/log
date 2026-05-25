@@ -88,8 +88,11 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         // Eagerly buffer bounded textual bodies so they are logged even when the handler never
         // reads them. Everything else (form, multipart, binary, large or unknown-length bodies)
         // passes through unwrapped and its body is not captured, to avoid buffering uploads.
-        CachedBodyHttpServletRequest cachedRequest =
-                shouldBufferEagerly(request, cacheLimit) ? new CachedBodyHttpServletRequest(request) : null;
+        CachedBodyHttpServletRequest cachedRequest = null;
+        if (shouldBufferEagerly(request, cacheLimit)) {
+
+            cachedRequest = new CachedBodyHttpServletRequest(request);
+        }
         HttpServletRequest requestToUse = Objects.requireNonNullElse(cachedRequest, request);
 
         long startedAt = System.nanoTime();
@@ -107,7 +110,10 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
 
-                byte[] requestBody = Objects.nonNull(cachedRequest) ? cachedRequest.getCachedBody() : null;
+                byte[] requestBody = null;
+                if (Objects.nonNull(cachedRequest)) {
+                    requestBody = cachedRequest.getCachedBody();
+                }
                 HttpExchangeLogEvent event = eventFactory.create(
                         requestToUse,
                         requestBody,

@@ -25,7 +25,23 @@ public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
     public CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
 
         super(request);
-        this.cachedBody = request.getInputStream().readAllBytes();
+        ServletInputStream inputStream = request.getInputStream();
+        this.cachedBody = inputStream.readAllBytes();
+    }
+
+    private static Charset resolveCharset(String encoding) {
+
+        if (Objects.isNull(encoding) || encoding.isBlank()) {
+
+            return StandardCharsets.UTF_8;
+        }
+        try {
+
+            return Charset.forName(encoding);
+        } catch (Exception ex) {
+
+            return StandardCharsets.UTF_8;
+        }
     }
 
     public byte[] getCachedBody() {
@@ -44,21 +60,6 @@ public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
         Charset charset = resolveCharset(getCharacterEncoding());
         return new BufferedReader(new InputStreamReader(new ByteArrayInputStream(cachedBody), charset));
-    }
-
-    private static Charset resolveCharset(String encoding) {
-
-        if (Objects.isNull(encoding) || encoding.isBlank()) {
-
-            return StandardCharsets.UTF_8;
-        }
-        try {
-
-            return Charset.forName(encoding);
-        } catch (Exception ex) {
-
-            return StandardCharsets.UTF_8;
-        }
     }
 
     private static final class CachedServletInputStream extends ServletInputStream {
@@ -93,5 +94,7 @@ public class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
 
             throw new UnsupportedOperationException("Async reads are not supported on cached request bodies");
         }
+
     }
+
 }

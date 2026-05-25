@@ -120,7 +120,7 @@ public class HttpExchangeLoggerAutoConfiguration {
             return new NoopHttpExchangeLogSink();
         }
         if (sinks.size() == 1) {
-            return sinks.get(0);
+            return sinks.getFirst();
         }
         return new CompositeHttpExchangeLogSink(sinks);
     }

@@ -54,7 +54,8 @@ public class HttpExchangeLogEventFactory {
     private static Throwable unwrap(Throwable throwable) {
 
         Throwable current = throwable;
-        while (current instanceof ServletException servletException && servletException.getCause() != null && servletException.getCause() != current) {
+        while (current instanceof ServletException servletException && Objects.nonNull(servletException.getCause()) && servletException.getCause() != current) {
+
             current = servletException.getCause();
         }
         return current;

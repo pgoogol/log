@@ -18,24 +18,19 @@ public class DefaultRequestIdProvider implements RequestIdProvider {
     // ids that don't match are discarded in favour of a generated UUID.
     private static final Pattern SAFE_ID = Pattern.compile("[\\x21-\\x7E]{1,200}");
 
-    private static boolean isSafe(String value) {
-
-        return !value.isEmpty() && value.length() <= MAX_LENGTH && SAFE_ID.matcher(value).matches();
-    }
-
     @Override
     public String getOrCreateRequestId(HttpServletRequest request, HttpServletResponse response) {
 
         String requestId = null;
         if (Objects.nonNull(request)) {
 
-            String existing = request.getHeader(HEADER);
-            if (Objects.nonNull(existing)) {
+            String existingRequestId = request.getHeader(HEADER);
+            if (Objects.nonNull(existingRequestId)) {
 
-                String trimmed = existing.trim();
-                if (isSafe(trimmed)) {
+                String trimmedRequestId = existingRequestId.trim();
+                if (isSafe(trimmedRequestId)) {
 
-                    requestId = trimmed;
+                    requestId = trimmedRequestId;
                 }
             }
         }
@@ -48,6 +43,11 @@ public class DefaultRequestIdProvider implements RequestIdProvider {
             response.setHeader(HEADER, requestId);
         }
         return requestId;
+    }
+
+    private boolean isSafe(String value) {
+
+        return !value.isEmpty() && value.length() <= MAX_LENGTH && SAFE_ID.matcher(value).matches();
     }
 
 }

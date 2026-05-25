@@ -24,7 +24,7 @@ public class DefaultHeaderSanitizer implements HeaderSanitizer {
 
         this.masker = masker;
         this.defaultHeaderMasker = new SensitiveValueMasker(DEFAULT_SENSITIVE_HEADERS);
-        this.maskingEnabled = maskProperties != null && maskProperties.isEnabled();
+        this.maskingEnabled = Objects.nonNull(maskProperties) && maskProperties.isEnabled();
     }
 
     @Override

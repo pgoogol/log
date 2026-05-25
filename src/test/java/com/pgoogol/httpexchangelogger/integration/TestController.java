@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping
@@ -29,7 +30,11 @@ public class TestController {
     public Map<String, Object> getOrder(@org.springframework.web.bind.annotation.PathVariable String id,
                                         @RequestParam(name = "source", required = false) String source) {
 
-        return Map.of("orderId", id, "source", source == null ? "unknown" : source);
+        if (Objects.isNull(source)) {
+
+            return Map.of("orderId", id, "source", "unknown");
+        }
+        return Map.of("orderId", id, "source", source);
     }
 
     @PostMapping(value = "/api/auth/login", consumes = MediaType.APPLICATION_JSON_VALUE,

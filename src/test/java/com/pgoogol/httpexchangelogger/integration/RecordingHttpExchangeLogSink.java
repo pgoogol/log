@@ -27,7 +27,7 @@ public class RecordingHttpExchangeLogSink implements HttpExchangeLogSink {
 
             throw new IllegalStateException("No events recorded");
         }
-        return events.get(events.size() - 1);
+        return events.getLast();
     }
 
     public void clear() {
