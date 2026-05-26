@@ -4,10 +4,13 @@ import com.pgoogol.httpexchangelogger.factory.HttpExchangeLogEventFactory;
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.sanitizer.BodySanitizer;
+import com.pgoogol.httpexchangelogger.sanitizer.DefaultBodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.DefaultHeaderSanitizer;
+import com.pgoogol.httpexchangelogger.sanitizer.FormBodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.HeaderSanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.JsonBodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.SensitiveValueMasker;
+import com.pgoogol.httpexchangelogger.sanitizer.XmlBodySanitizer;
 import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
 import com.pgoogol.httpexchangelogger.sink.CompositeHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.ConsoleHttpExchangeLogSink;
@@ -66,7 +69,11 @@ public class HttpExchangeLoggerAutoConfiguration {
                                        HttpExchangeLoggerProperties properties,
                                        ObjectProvider<ObjectMapper> objectMapperProvider) {
 
-        return new JsonBodySanitizer(resolveObjectMapper(objectMapperProvider), masker, properties.getMask());
+        HttpExchangeLoggerProperties.Mask maskProperties = properties.getMask();
+        JsonBodySanitizer json = new JsonBodySanitizer(resolveObjectMapper(objectMapperProvider), masker, maskProperties);
+        XmlBodySanitizer xml = new XmlBodySanitizer(masker, maskProperties);
+        FormBodySanitizer form = new FormBodySanitizer(masker, maskProperties);
+        return new DefaultBodySanitizer(json, xml, form);
     }
 
     @Bean

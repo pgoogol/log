@@ -70,4 +70,25 @@ public class TestController {
         return "ok";
     }
 
+    @PostMapping(value = "/api/products", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> createProduct(@RequestBody Map<String, Object> body) {
+
+        return Map.of("productId", "prod_789", "received", body.size());
+    }
+
+    @PostMapping(value = "/api/form", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> formSubmit(@RequestParam Map<String, String> params) {
+
+        return Map.of("received", params.size(), "user", params.getOrDefault("user", "none"));
+    }
+
+    @PostMapping(value = "/api/xml", consumes = MediaType.APPLICATION_XML_VALUE,
+            produces = MediaType.APPLICATION_XML_VALUE)
+    public String xmlEcho(@RequestBody String body) {
+
+        return "<response><orderId>ord_xml</orderId></response>";
+    }
+
 }

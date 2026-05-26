@@ -19,6 +19,11 @@ public class HttpExchangeLoggerProperties {
     private int maxBodyLength = 10_000;
 
     /**
+     * Body length cap applied in LIMITED mode. Always bounded by maxBodyLength as an absolute ceiling.
+     */
+    private int limitedMaxBodyLength = 2_000;
+
+    /**
      * Servlet filter order; runs early by default so the full exchange is captured.
      */
     private int filterOrder = Ordered.HIGHEST_PRECEDENCE + 10;
@@ -69,6 +74,16 @@ public class HttpExchangeLoggerProperties {
     public void setMaxBodyLength(int maxBodyLength) {
 
         this.maxBodyLength = maxBodyLength;
+    }
+
+    public int getLimitedMaxBodyLength() {
+
+        return limitedMaxBodyLength;
+    }
+
+    public void setLimitedMaxBodyLength(int limitedMaxBodyLength) {
+
+        this.limitedMaxBodyLength = limitedMaxBodyLength;
     }
 
     public int getFilterOrder() {
