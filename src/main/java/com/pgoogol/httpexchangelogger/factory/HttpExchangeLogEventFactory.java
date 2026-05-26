@@ -16,7 +16,6 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import tools.jackson.databind.ObjectMapper;
-
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
@@ -34,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class HttpExchangeLogEventFactory {
 
@@ -180,10 +180,19 @@ public class HttpExchangeLogEventFactory {
         Charset charset = resolveCharset(request.getCharacterEncoding());
         String reconstructed = parameters.entrySet().stream()
                 .filter(entry -> !queryKeys.contains(entry.getKey()))
-                .flatMap(entry -> Arrays.stream(entry.getValue())
-                        .map(value -> encode(entry.getKey(), charset) + "=" + encode(Objects.toString(value, ""), charset)))
+                .flatMap(entry -> reconstructQuery(entry, charset))
                 .collect(Collectors.joining("&"));
-        return reconstructed.isEmpty() ? null : reconstructed;
+        if (reconstructed.isEmpty()) {
+
+            return null;
+        }
+        return reconstructed;
+    }
+
+    private Stream<String> reconstructQuery(Map.Entry<String, String[]> entry, Charset charset) {
+
+        return Arrays.stream(entry.getValue())
+                .map(value -> encode(entry.getKey(), charset) + "=" + encode(Objects.toString(value, ""), charset));
     }
 
     private Set<String> extractQueryStringKeys(String queryString) {
@@ -194,14 +203,21 @@ public class HttpExchangeLogEventFactory {
         }
         Set<String> keys = new HashSet<>();
         Arrays.stream(queryString.split("&"))
-                .map(pair -> {
-                    int equals = pair.indexOf('=');
-                    return equals < 0 ? pair : pair.substring(0, equals);
-                })
+                .map(this::getKey)
                 .map(this::decode)
                 .filter(Objects::nonNull)
                 .forEach(keys::add);
         return keys;
+    }
+
+    private String getKey(String pair) {
+
+        int equals = pair.indexOf('=');
+        if (equals < 0) {
+
+            return pair;
+        }
+        return pair.substring(0, equals);
     }
 
     private String decode(String encoded) {
