@@ -21,6 +21,7 @@ class HttpExchangeLoggerPropertiesTest {
             assertThat(props.isEnabled()).isTrue();
             assertThat(props.getDefaultMode()).isEqualTo(HttpLogMode.BASIC);
             assertThat(props.getMaxBodyLength()).isEqualTo(10_000);
+            assertThat(props.getLimitedMaxBodyLength()).isEqualTo(2_000);
             assertThat(props.isRequireTtlForFullLogging()).isFalse();
             assertThat(props.getSink().isConsole()).isTrue();
             assertThat(props.getSink().isFile()).isFalse();
@@ -44,6 +45,7 @@ class HttpExchangeLoggerPropertiesTest {
                 "http-exchange-logger.default-mode=LIMITED",
                 "http-exchange-logger.require-ttl-for-full-logging=true",
                 "http-exchange-logger.max-body-length=512",
+                "http-exchange-logger.limited-max-body-length=64",
                 "http-exchange-logger.sink.console=false",
                 "http-exchange-logger.sink.file=true",
                 "http-exchange-logger.sink.observability=true",
@@ -63,6 +65,7 @@ class HttpExchangeLoggerPropertiesTest {
             assertThat(props.getDefaultMode()).isEqualTo(HttpLogMode.LIMITED);
             assertThat(props.isRequireTtlForFullLogging()).isTrue();
             assertThat(props.getMaxBodyLength()).isEqualTo(512);
+            assertThat(props.getLimitedMaxBodyLength()).isEqualTo(64);
             assertThat(props.getSink().isConsole()).isFalse();
             assertThat(props.getSink().isFile()).isTrue();
             assertThat(props.getSink().isObservability()).isTrue();

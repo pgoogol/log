@@ -32,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "http-exchange-logger.enabled=true",
         "http-exchange-logger.default-mode=LIMITED",
         "http-exchange-logger.max-body-length=200",
+        "http-exchange-logger.limited-max-body-length=50",
         "http-exchange-logger.endpoints[0].pattern=/api/orders",
         "http-exchange-logger.endpoints[0].mode=FULL",
         "http-exchange-logger.endpoints[1].pattern=/api/orders/**",
@@ -43,7 +44,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "http-exchange-logger.endpoints[4].pattern=/api/boom",
         "http-exchange-logger.endpoints[4].mode=FULL",
         "http-exchange-logger.endpoints[5].pattern=/api/binary",
-        "http-exchange-logger.endpoints[5].mode=FULL"
+        "http-exchange-logger.endpoints[5].mode=FULL",
+        "http-exchange-logger.endpoints[6].pattern=/api/products",
+        "http-exchange-logger.endpoints[6].mode=LIMITED",
+        "http-exchange-logger.endpoints[7].pattern=/api/form",
+        "http-exchange-logger.endpoints[7].mode=FULL",
+        "http-exchange-logger.endpoints[8].pattern=/api/xml",
+        "http-exchange-logger.endpoints[8].mode=FULL"
 })
 class HttpExchangeLoggingFilterIntegrationTest {
 
@@ -269,6 +276,74 @@ class HttpExchangeLoggingFilterIntegrationTest {
         assertThat(result.getResponse().getHeader("X-Request-Id")).isEqualTo("external-id");
         HttpExchangeLogEvent event = sink.last();
         assertThat(event.getRequestId()).isEqualTo("external-id");
+    }
+
+    @Test
+    void doFilter_whenModeLimited_appliesLimitedMaxBodyLengthAndCapsEarlierThanFull() throws Exception {
+
+        // given
+        // 100-char body: 100 > limited-max-body-length (50) so LIMITED truncates,
+        // but 100 < max-body-length (200) so FULL keeps it intact.
+        String body = "{\"productId\":\"p_1\",\"data\":\"%s\"}".formatted("x".repeat(70));
+
+        // when
+        mockMvc().perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+        HttpExchangeLogEvent limitedEvent = sink.last();
+
+        sink.clear();
+        mockMvc().perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+        HttpExchangeLogEvent fullEvent = sink.last();
+
+        // then
+        assertThat(limitedEvent.getConfiguredMode()).isEqualTo(HttpLogMode.LIMITED);
+        assertThat(limitedEvent.isRequestBodyTruncated()).isTrue();
+        assertThat(fullEvent.getConfiguredMode()).isEqualTo(HttpLogMode.FULL);
+        assertThat(fullEvent.isRequestBodyTruncated()).isFalse();
+    }
+
+    @Test
+    void doFilter_whenFormUrlEncodedRequest_logsBodyAndMasksSensitiveFields() throws Exception {
+
+        // given / when
+        mockMvc().perform(post("/api/form")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .content("user=alice&password=hunter2"))
+                .andExpect(status().isOk());
+
+        // then
+        HttpExchangeLogEvent event = sink.last();
+        assertThat(event.getRequestBody()).isNotNull();
+        String logged = event.getRequestBody().toString();
+        assertThat(logged).contains("user=alice");
+        assertThat(logged).contains("password=***");
+        assertThat(logged).doesNotContain("hunter2");
+    }
+
+    @Test
+    void doFilter_whenXmlRequest_logsBodyAndMasksSensitiveElements() throws Exception {
+
+        // given
+        String body = "<order><password>secret</password><productId>p_1</productId></order>";
+
+        // when
+        mockMvc().perform(post("/api/xml")
+                        .contentType(MediaType.APPLICATION_XML)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        // then
+        HttpExchangeLogEvent event = sink.last();
+        assertThat(event.getRequestBody()).isNotNull();
+        String logged = event.getRequestBody().toString();
+        assertThat(logged).contains("<password>***</password>");
+        assertThat(logged).contains("<productId>p_1</productId>");
+        assertThat(logged).doesNotContain("secret");
     }
 
     private List<String> extractByKey(Map<String, List<String>> headers, String key) {

@@ -8,9 +8,9 @@ Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami pe
 
 ## Wymagania
 
-- Spring Boot 4.x
+- Spring Boot 4.x (najnowsza wersja)
 - Spring Framework 7.x
-- Java 17+
+- Java 21+
 - Stack: Spring MVC / Servlet (jakarta.servlet)
 - Jackson 3 (`tools.jackson`) — dostarczany przez Spring Boot 4, nie trzeba dodawac recznie
 
@@ -66,10 +66,17 @@ Aby logi pojawily sie w konsoli, musza byc spelnione dwa warunki:
 |---|---|
 | `OFF` | brak logowania, filtr nie emituje eventu |
 | `BASIC` | metoda, sciezka, query string, status, czas, requestId, exception |
-| `LIMITED` | wszystko z BASIC + clientIp + headers + body (z maskowaniem i limitem) |
-| `FULL` | wszystko z LIMITED + pelniejsze body (nadal maskowane i limitowane) |
+| `LIMITED` | wszystko z BASIC + clientIp + headers + body z mniejszym limitem (`limited-max-body-length`) |
+| `FULL` | wszystko z LIMITED + body do pelnego limitu (`max-body-length`) |
 
 `FULL` zawsze stosuje maskowanie, `max-body-length` oraz pomija multiparty/binarki.
+
+Roznica miedzy LIMITED i FULL polega na limicie dlugosci body:
+
+- `LIMITED` tnie body do `min(limited-max-body-length, max-body-length)` (domyslnie 2000 znakow),
+- `FULL` tnie body do `max-body-length` (domyslnie 10 000 znakow).
+
+`max-body-length` zawsze pozostaje absolutnym sufitem (rowniez dla `FULL`).
 
 ---
 
@@ -108,19 +115,26 @@ http-exchange-logger:
       - email
 ```
 
-Maskowanie jest case-insensitive i rekurencyjne dla JSON-a. Wartosci pol z listy `fields` sa zamieniane na `***`.
+Maskowanie jest case-insensitive i rekurencyjne. Wartosci pol z listy `fields` sa zamieniane na `***`. Obslugiwane formaty:
+
+- `application/json`, `application/*+json` — pelne maskowanie rekurencyjne (obiekty i tablice),
+- `application/xml`, `application/*+xml` — maskowanie tekstu wewnatrz elementow oraz wartosci atrybutow,
+- `application/x-www-form-urlencoded` — maskowanie wartosci par `klucz=wartosc`,
+- `text/*` — body jest logowane, ale nie ma struktury pol, wiec nie jest field-maskowane (zalecane: nie wysylac sekretow w `text/plain`).
 
 Headery `Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` sa maskowane **zawsze**, takze gdy `mask.enabled=false` — wylaczenie maskowania nie odslania domyslnych naglowkow z poswiadczeniami. Lista `fields` (dla body i dodatkowych naglowkow) dziala tylko przy `mask.enabled=true`.
 
-Jezeli body jest JSON-em, ale nie da sie go sparsowac (np. niepoprawny lub uciety), a maskowanie pol jest wlaczone, biblioteka **nie loguje surowej tresci** — wstawia placeholder, zeby nie wyciekly sekrety (fail-closed). Maskowanie odbywa sie zawsze przed ucinaniem body.
+Jezeli body jest JSON-em lub XML-em, ale nie da sie go sparsowac (np. niepoprawny lub uciety), a maskowanie pol jest wlaczone, biblioteka **nie loguje surowej tresci** — wstawia placeholder, zeby nie wyciekly sekrety (fail-closed). Maskowanie odbywa sie zawsze przed ucinaniem body. Parser XML ma wylaczone DOCTYPE i zewnetrzne encje (ochrona XXE).
 
 ---
 
 ## Limit body i pominiete typy
 
-`max-body-length` (domyslnie 10 000 znakow) obowiazuje w kazdym trybie, takze w `FULL`. Po przekroczeniu limitu logowane body jest ucinane, a w evencie pojawia sie `requestBodyTruncated: true` lub `responseBodyTruncated: true`. Ustawienie `max-body-length: 0` wylacza logowanie body (pozostale metadane sa nadal logowane).
+`max-body-length` (domyslnie 10 000 znakow) obowiazuje w kazdym trybie, takze w `FULL`. `limited-max-body-length` (domyslnie 2000) obowiazuje dodatkowo w trybie `LIMITED` — efektywny limit dla LIMITED to `min(limited-max-body-length, max-body-length)`. Po przekroczeniu limitu logowane body jest ucinane, a w evencie pojawia sie `requestBodyTruncated: true` lub `responseBodyTruncated: true`. Ustawienie `max-body-length: 0` wylacza logowanie body (pozostale metadane sa nadal logowane).
 
 Mieszczace sie w limicie body JSON jest logowane jako zagniezdzony obiekt (`requestBody: { ... }`), a nie jako tekst. Body uciete jest logowane jako skrocony string.
+
+Body `application/x-www-form-urlencoded` jest odtwarzane z `getParameterMap()` po wykonaniu handlera — dzieki temu nie naruszamy parsowania parametrow przez kontener, a body jest logowane (z maskowaniem).
 
 Nie sa logowane body dla nieobslugiwanych content type:
 

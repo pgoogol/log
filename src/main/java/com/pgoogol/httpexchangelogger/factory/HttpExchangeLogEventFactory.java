@@ -17,15 +17,23 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class HttpExchangeLogEventFactory {
 
@@ -94,10 +102,27 @@ public class HttpExchangeLogEventFactory {
             builder.responseHeaders(sanitizeHeaders(extractResponseHeaders(response)));
         }
 
-        applyRequestBody(request, requestBody, builder);
-        applyResponseBody(response, builder);
+        int bodyCap = effectiveBodyCap(mode);
+        applyRequestBody(request, requestBody, builder, bodyCap);
+        applyResponseBody(response, builder, bodyCap);
 
         return builder.build();
+    }
+
+    private int effectiveBodyCap(HttpLogMode mode) {
+
+        int max = properties.getMaxBodyLength();
+        if (mode == HttpLogMode.LIMITED) {
+
+            // maxBodyLength remains the absolute ceiling per documentation: "limit obowiązuje zawsze".
+            int limited = properties.getLimitedMaxBodyLength();
+            if (limited <= 0) {
+
+                return 0;
+            }
+            return Math.min(limited, max);
+        }
+        return max;
     }
 
     private int resolveStatus(ContentCachingResponseWrapper response, Throwable exception) {
@@ -112,10 +137,16 @@ public class HttpExchangeLogEventFactory {
         return status;
     }
 
-    private void applyRequestBody(HttpServletRequest request, byte[] requestBody, HttpExchangeLogEvent.Builder builder) {
+    private void applyRequestBody(HttpServletRequest request, byte[] requestBody, HttpExchangeLogEvent.Builder builder, int cap) {
 
         String contentType = request.getContentType();
         String body = BodyExtractor.toBodyString(requestBody, request.getCharacterEncoding());
+        // Form bodies are not pre-buffered (would break getParameter on the original request).
+        // Reconstruct them from the parameter map after the chain ran, so they are still logged.
+        if (Objects.isNull(body) && Objects.nonNull(contentType) && ContentTypeMatcher.isFormUrlEncoded(contentType)) {
+
+            body = reconstructFormBody(request);
+        }
         // Only bounded textual request bodies are captured. When the request carried a body of an
         // unloggable type (binary, multipart) it is never read, so emit the same placeholder the
         // response path would instead of silently dropping it.
@@ -124,13 +155,84 @@ public class HttpExchangeLogEventFactory {
             builder.requestBody(notLogged(contentType));
             return;
         }
-        BodyResult result = buildBody(body, contentType);
+        BodyResult result = buildBody(body, contentType, cap);
         if (Objects.isNull(result)) {
 
             return;
         }
         builder.requestBody(result.value());
         builder.requestBodyTruncated(result.truncated());
+    }
+
+    private String reconstructFormBody(HttpServletRequest request) {
+
+        String method = Objects.toString(request.getMethod(), "").toUpperCase(Locale.ROOT);
+        if (!Set.of("POST", "PUT", "PATCH").contains(method)) {
+
+            return null;
+        }
+        Map<String, String[]> parameters = request.getParameterMap();
+        if (CollectionUtils.isEmpty(parameters)) {
+
+            return null;
+        }
+        Set<String> queryKeys = extractQueryStringKeys(request.getQueryString());
+        Charset charset = resolveCharset(request.getCharacterEncoding());
+        String reconstructed = parameters.entrySet().stream()
+                .filter(entry -> !queryKeys.contains(entry.getKey()))
+                .flatMap(entry -> Arrays.stream(entry.getValue())
+                        .map(value -> encode(entry.getKey(), charset) + "=" + encode(Objects.toString(value, ""), charset)))
+                .collect(Collectors.joining("&"));
+        return reconstructed.isEmpty() ? null : reconstructed;
+    }
+
+    private Set<String> extractQueryStringKeys(String queryString) {
+
+        if (!StringUtils.hasText(queryString)) {
+
+            return Collections.emptySet();
+        }
+        Set<String> keys = new HashSet<>();
+        Arrays.stream(queryString.split("&"))
+                .map(pair -> {
+                    int equals = pair.indexOf('=');
+                    return equals < 0 ? pair : pair.substring(0, equals);
+                })
+                .map(this::decode)
+                .filter(Objects::nonNull)
+                .forEach(keys::add);
+        return keys;
+    }
+
+    private String decode(String encoded) {
+
+        try {
+
+            return URLDecoder.decode(encoded, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+
+            return encoded;
+        }
+    }
+
+    private String encode(String value, Charset charset) {
+
+        return URLEncoder.encode(value, charset);
+    }
+
+    private Charset resolveCharset(String encoding) {
+
+        if (!StringUtils.hasText(encoding)) {
+
+            return StandardCharsets.UTF_8;
+        }
+        try {
+
+            return Charset.forName(encoding);
+        } catch (Exception ex) {
+
+            return StandardCharsets.UTF_8;
+        }
     }
 
     private boolean carriesUnloggableBody(HttpServletRequest request, String contentType) {
@@ -142,10 +244,10 @@ public class HttpExchangeLogEventFactory {
         return ContentTypeMatcher.isBinary(contentType) || !ContentTypeMatcher.isLoggable(contentType);
     }
 
-    private void applyResponseBody(ContentCachingResponseWrapper response, HttpExchangeLogEvent.Builder builder) {
+    private void applyResponseBody(ContentCachingResponseWrapper response, HttpExchangeLogEvent.Builder builder, int cap) {
 
         String body = BodyExtractor.toBodyString(response.getContentAsByteArray(), response.getCharacterEncoding());
-        BodyResult result = buildBody(body, response.getContentType());
+        BodyResult result = buildBody(body, response.getContentType(), cap);
         if (Objects.isNull(result)) {
 
             return;
@@ -154,15 +256,15 @@ public class HttpExchangeLogEventFactory {
         builder.responseBodyTruncated(result.truncated());
     }
 
-    private BodyResult buildBody(String body, String contentType) {
+    private BodyResult buildBody(String body, String contentType, int cap) {
 
         if (!StringUtils.hasLength(body)) {
 
             return null;
         }
-        if (properties.getMaxBodyLength() <= 0) {
+        if (cap <= 0) {
 
-            // Body logging disabled.
+            // Body logging disabled for this mode.
             return null;
         }
         if (Objects.nonNull(contentType) && ContentTypeMatcher.isBinary(contentType)) {
@@ -178,7 +280,7 @@ public class HttpExchangeLogEventFactory {
         // because sensitive values are already replaced.
         String sanitized = bodySanitizer.sanitize(body, contentType);
 
-        BodyTruncator.TruncationResult truncated = BodyTruncator.truncate(sanitized, properties.getMaxBodyLength());
+        BodyTruncator.TruncationResult truncated = BodyTruncator.truncate(sanitized, cap);
         if (truncated.truncated()) {
 
             return new BodyResult(truncated.value(), true);
