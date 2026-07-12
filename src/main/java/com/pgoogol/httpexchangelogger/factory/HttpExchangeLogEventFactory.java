@@ -9,6 +9,7 @@ import com.pgoogol.httpexchangelogger.support.BodyExtractor;
 import com.pgoogol.httpexchangelogger.support.BodyTruncator;
 import com.pgoogol.httpexchangelogger.support.ClientIpExtractor;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
+import com.pgoogol.httpexchangelogger.support.TraceContextProvider;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,14 +45,21 @@ public class HttpExchangeLogEventFactory {
     private final BodySanitizer bodySanitizer;
     private final ClientIpExtractor clientIpExtractor;
     private final ObjectMapper objectMapper;
+    private final TraceContextProvider traceContextProvider;
 
     public HttpExchangeLogEventFactory(HttpExchangeLoggerProperties properties, HeaderSanitizer headerSanitizer, BodySanitizer bodySanitizer, ClientIpExtractor clientIpExtractor, ObjectMapper objectMapper) {
+
+        this(properties, headerSanitizer, bodySanitizer, clientIpExtractor, objectMapper, null);
+    }
+
+    public HttpExchangeLogEventFactory(HttpExchangeLoggerProperties properties, HeaderSanitizer headerSanitizer, BodySanitizer bodySanitizer, ClientIpExtractor clientIpExtractor, ObjectMapper objectMapper, TraceContextProvider traceContextProvider) {
 
         this.properties = properties;
         this.headerSanitizer = headerSanitizer;
         this.bodySanitizer = bodySanitizer;
         this.clientIpExtractor = clientIpExtractor;
         this.objectMapper = objectMapper;
+        this.traceContextProvider = traceContextProvider;
     }
 
     private static String notLogged(String contentType) {
@@ -72,6 +80,14 @@ public class HttpExchangeLogEventFactory {
     public HttpExchangeLogEvent create(HttpServletRequest request, byte[] requestBody, ContentCachingResponseWrapper response, HttpLogMode configuredMode, HttpLogMode effectiveMode, String requestId, long durationMs, Throwable exception) {
 
         HttpExchangeLogEvent.Builder builder = HttpExchangeLogEvent.builder().requestId(requestId).method(request.getMethod()).path(request.getRequestURI()).status(resolveStatus(response, exception)).durationMs(durationMs).configuredMode(configuredMode).effectiveMode(effectiveMode);
+
+        if (Objects.nonNull(traceContextProvider)) {
+
+            traceContextProvider.currentTraceContext().ifPresent(context -> {
+                builder.traceId(context.traceId());
+                builder.spanId(context.spanId());
+            });
+        }
 
         HttpExchangeLoggerProperties.Include propertiesInclude = properties.getInclude();
         if (propertiesInclude.isQueryString()) {

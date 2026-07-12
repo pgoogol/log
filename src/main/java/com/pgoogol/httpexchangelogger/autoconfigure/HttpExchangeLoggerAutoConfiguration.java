@@ -23,7 +23,9 @@ import com.pgoogol.httpexchangelogger.sink.NoopHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.support.ClientIpExtractor;
 import com.pgoogol.httpexchangelogger.support.DefaultClientIpExtractor;
 import com.pgoogol.httpexchangelogger.support.DefaultRequestIdProvider;
+import com.pgoogol.httpexchangelogger.support.MdcTraceContextProvider;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
+import com.pgoogol.httpexchangelogger.support.TraceContextProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -113,6 +115,13 @@ public class HttpExchangeLoggerAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public TraceContextProvider traceContextProvider() {
+
+        return new MdcTraceContextProvider();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public HttpExchangeLogEventJsonWriter httpExchangeLogEventJsonWriter(ObjectProvider<ObjectMapper> objectMapperProvider) {
 
         return new HttpExchangeLogEventJsonWriter(resolveObjectMapper(objectMapperProvider));
@@ -124,10 +133,11 @@ public class HttpExchangeLoggerAutoConfiguration {
                                                                    HeaderSanitizer headerSanitizer,
                                                                    BodySanitizer bodySanitizer,
                                                                    ClientIpExtractor clientIpExtractor,
-                                                                   ObjectProvider<ObjectMapper> objectMapperProvider) {
+                                                                   ObjectProvider<ObjectMapper> objectMapperProvider,
+                                                                   TraceContextProvider traceContextProvider) {
 
         return new HttpExchangeLogEventFactory(properties, headerSanitizer, bodySanitizer,
-                clientIpExtractor, resolveObjectMapper(objectMapperProvider));
+                clientIpExtractor, resolveObjectMapper(objectMapperProvider), traceContextProvider);
     }
 
     private static ObjectMapper resolveObjectMapper(ObjectProvider<ObjectMapper> objectMapperProvider) {

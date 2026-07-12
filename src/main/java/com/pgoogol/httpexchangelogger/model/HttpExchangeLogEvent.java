@@ -10,6 +10,8 @@ import java.util.Map;
 @JsonPropertyOrder({
         "type",
         "requestId",
+        "traceId",
+        "spanId",
         "method",
         "path",
         "queryString",
@@ -31,6 +33,8 @@ public final class HttpExchangeLogEvent {
 
     private final String type;
     private final String requestId;
+    private final String traceId;
+    private final String spanId;
     private final String method;
     private final String path;
     private final String queryString;
@@ -52,6 +56,8 @@ public final class HttpExchangeLogEvent {
 
         this.type = builder.type;
         this.requestId = builder.requestId;
+        this.traceId = builder.traceId;
+        this.spanId = builder.spanId;
         this.method = builder.method;
         this.path = builder.path;
         this.queryString = builder.queryString;
@@ -83,6 +89,16 @@ public final class HttpExchangeLogEvent {
     public String getRequestId() {
 
         return requestId;
+    }
+
+    public String getTraceId() {
+
+        return traceId;
+    }
+
+    public String getSpanId() {
+
+        return spanId;
     }
 
     public String getMethod() {
@@ -169,6 +185,8 @@ public final class HttpExchangeLogEvent {
 
         private String type = "http_exchange";
         private String requestId;
+        private String traceId;
+        private String spanId;
         private String method;
         private String path;
         private String queryString;
@@ -199,6 +217,18 @@ public final class HttpExchangeLogEvent {
         public Builder requestId(String requestId) {
 
             this.requestId = requestId;
+            return this;
+        }
+
+        public Builder traceId(String traceId) {
+
+            this.traceId = traceId;
+            return this;
+        }
+
+        public Builder spanId(String spanId) {
+
+            this.spanId = spanId;
             return this;
         }
 

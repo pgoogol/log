@@ -38,6 +38,8 @@ public class HttpExchangeLoggerProperties {
 
     private Async async = new Async();
 
+    private Tracing tracing = new Tracing();
+
     private List<Endpoint> endpoints = new ArrayList<>();
 
     public boolean isEnabled() {
@@ -148,6 +150,16 @@ public class HttpExchangeLoggerProperties {
     public void setAsync(Async async) {
 
         this.async = async;
+    }
+
+    public Tracing getTracing() {
+
+        return tracing;
+    }
+
+    public void setTracing(Tracing tracing) {
+
+        this.tracing = tracing;
     }
 
     public List<Endpoint> getEndpoints() {
@@ -350,6 +362,26 @@ public class HttpExchangeLoggerProperties {
         public void setShutdownTimeoutMs(long shutdownTimeoutMs) {
 
             this.shutdownTimeoutMs = shutdownTimeoutMs;
+        }
+
+    }
+
+    public static class Tracing {
+
+        /**
+         * When the OpenTelemetry API is on the classpath, enrich the current
+         * span with http_exchange.* attributes for every logged exchange.
+         */
+        private boolean otelSpanAttributes = true;
+
+        public boolean isOtelSpanAttributes() {
+
+            return otelSpanAttributes;
+        }
+
+        public void setOtelSpanAttributes(boolean otelSpanAttributes) {
+
+            this.otelSpanAttributes = otelSpanAttributes;
         }
 
     }
