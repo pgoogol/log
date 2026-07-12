@@ -1,2 +1,3 @@
 com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerAutoConfiguration
 com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerAdminAutoConfiguration
+com.pgoogol.httpexchangelogger.autoconfigure.HttpExchangeLoggerObservabilityAutoConfiguration
