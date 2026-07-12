@@ -5,6 +5,8 @@ import com.pgoogol.httpexchangelogger.factory.HttpExchangeLogEventFactory;
 import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
+import com.pgoogol.httpexchangelogger.resolver.ExchangeSampler;
+import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
 import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.support.CachedBodyHttpServletRequest;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
@@ -21,6 +23,7 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Optional;
 
 public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
@@ -31,18 +34,24 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
     private final HttpExchangeLogEventFactory eventFactory;
     private final HttpExchangeLogSink sink;
     private final RequestIdProvider requestIdProvider;
+    private final ExchangeSampler sampler;
+    private final RuntimeModeOverrideManager overrideManager;
 
     public HttpExchangeLoggingFilter(HttpExchangeLoggerProperties properties,
                                      EndpointLoggingModeResolver modeResolver,
                                      HttpExchangeLogEventFactory eventFactory,
                                      HttpExchangeLogSink sink,
-                                     RequestIdProvider requestIdProvider) {
+                                     RequestIdProvider requestIdProvider,
+                                     ExchangeSampler sampler,
+                                     RuntimeModeOverrideManager overrideManager) {
 
         this.properties = properties;
         this.modeResolver = modeResolver;
         this.eventFactory = eventFactory;
         this.sink = sink;
         this.requestIdProvider = requestIdProvider;
+        this.sampler = sampler;
+        this.overrideManager = overrideManager;
     }
 
     private static int resolveCacheLimit(int maxBodyLength) {
@@ -70,13 +79,23 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        HttpLogMode mode = modeResolver.resolve(request);
+        HttpLogMode configuredMode = modeResolver.resolve(request);
+        Optional<HttpLogMode> override = overrideManager.resolve(request.getRequestURI());
+        HttpLogMode effectiveMode = override.orElse(configuredMode);
 
         // Correlation id is established for every request the filter sees (including OFF),
         // so downstream consumers always get an X-Request-Id.
         String requestId = requestIdProvider.getOrCreateRequestId(request, response);
 
-        if (mode == HttpLogMode.OFF) {
+        if (effectiveMode == HttpLogMode.OFF) {
+
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // An explicit runtime override expresses the intent to see these exchanges,
+        // so it bypasses sampling.
+        if (override.isEmpty() && !sampler.shouldSample(request.getRequestURI())) {
 
             filterChain.doFilter(request, response);
             return;
@@ -118,7 +137,8 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                         requestToUse,
                         requestBody,
                         wrappedResponse,
-                        mode,
+                        configuredMode,
+                        effectiveMode,
                         requestId,
                         durationMs,
                         exception

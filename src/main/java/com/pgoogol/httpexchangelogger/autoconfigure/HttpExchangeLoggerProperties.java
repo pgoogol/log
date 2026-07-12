@@ -34,6 +34,12 @@ public class HttpExchangeLoggerProperties {
 
     private Mask mask = new Mask();
 
+    private Sampling sampling = new Sampling();
+
+    private Async async = new Async();
+
+    private Tracing tracing = new Tracing();
+
     private List<Endpoint> endpoints = new ArrayList<>();
 
     public boolean isEnabled() {
@@ -126,6 +132,36 @@ public class HttpExchangeLoggerProperties {
         this.mask = mask;
     }
 
+    public Sampling getSampling() {
+
+        return sampling;
+    }
+
+    public void setSampling(Sampling sampling) {
+
+        this.sampling = sampling;
+    }
+
+    public Async getAsync() {
+
+        return async;
+    }
+
+    public void setAsync(Async async) {
+
+        this.async = async;
+    }
+
+    public Tracing getTracing() {
+
+        return tracing;
+    }
+
+    public void setTracing(Tracing tracing) {
+
+        this.tracing = tracing;
+    }
+
     public List<Endpoint> getEndpoints() {
 
         return endpoints;
@@ -141,6 +177,11 @@ public class HttpExchangeLoggerProperties {
         private boolean console = true;
         private boolean file = false;
         private boolean observability = false;
+
+        /**
+         * Target file for the file sink; parent directories are created on startup.
+         */
+        private String filePath = "logs/http-exchange.log";
 
         public boolean isConsole() {
 
@@ -160,6 +201,16 @@ public class HttpExchangeLoggerProperties {
         public void setFile(boolean file) {
 
             this.file = file;
+        }
+
+        public String getFilePath() {
+
+            return filePath;
+        }
+
+        public void setFilePath(String filePath) {
+
+            this.filePath = filePath;
         }
 
         public boolean isObservability() {
@@ -249,10 +300,101 @@ public class HttpExchangeLoggerProperties {
 
     }
 
+    public static class Sampling {
+
+        /**
+         * Fraction of exchanges that are logged (0.0 - 1.0). 1.0 logs everything.
+         */
+        private double rate = 1.0d;
+
+        public double getRate() {
+
+            return rate;
+        }
+
+        public void setRate(double rate) {
+
+            this.rate = rate;
+        }
+
+    }
+
+    public static class Async {
+
+        private boolean enabled = false;
+
+        /**
+         * Bounded queue between request threads and the sink worker; when full,
+         * events are dropped (never blocking the request).
+         */
+        private int queueCapacity = 1_000;
+
+        /**
+         * How long shutdown waits for queued events to be flushed to the sinks.
+         */
+        private long shutdownTimeoutMs = 2_000;
+
+        public boolean isEnabled() {
+
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+
+            this.enabled = enabled;
+        }
+
+        public int getQueueCapacity() {
+
+            return queueCapacity;
+        }
+
+        public void setQueueCapacity(int queueCapacity) {
+
+            this.queueCapacity = queueCapacity;
+        }
+
+        public long getShutdownTimeoutMs() {
+
+            return shutdownTimeoutMs;
+        }
+
+        public void setShutdownTimeoutMs(long shutdownTimeoutMs) {
+
+            this.shutdownTimeoutMs = shutdownTimeoutMs;
+        }
+
+    }
+
+    public static class Tracing {
+
+        /**
+         * When the OpenTelemetry API is on the classpath, enrich the current
+         * span with http_exchange.* attributes for every logged exchange.
+         */
+        private boolean otelSpanAttributes = true;
+
+        public boolean isOtelSpanAttributes() {
+
+            return otelSpanAttributes;
+        }
+
+        public void setOtelSpanAttributes(boolean otelSpanAttributes) {
+
+            this.otelSpanAttributes = otelSpanAttributes;
+        }
+
+    }
+
     public static class Endpoint {
 
         private String pattern;
         private HttpLogMode mode;
+
+        /**
+         * Optional per-endpoint sampling rate overriding {@code sampling.rate}.
+         */
+        private Double sampleRate;
 
         public String getPattern() {
 
@@ -272,6 +414,16 @@ public class HttpExchangeLoggerProperties {
         public void setMode(HttpLogMode mode) {
 
             this.mode = mode;
+        }
+
+        public Double getSampleRate() {
+
+            return sampleRate;
+        }
+
+        public void setSampleRate(Double sampleRate) {
+
+            this.sampleRate = sampleRate;
         }
 
     }
