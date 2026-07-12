@@ -1,6 +1,7 @@
 package com.pgoogol.httpexchangelogger.integration;
 
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
+import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
 import org.junit.jupiter.api.AfterEach;
@@ -13,7 +14,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -21,12 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = HttpExchangeLoggingFilterSamplingTest.TestApp.class)
+@SpringBootTest(classes = HttpExchangeLoggingFilterOverrideTest.TestApp.class)
 @TestPropertySource(properties = {
-        "http-exchange-logger.default-mode=FULL",
-        "http-exchange-logger.sampling.rate=0.0"
+        "http-exchange-logger.default-mode=BASIC"
 })
-class HttpExchangeLoggingFilterSamplingTest {
+class HttpExchangeLoggingFilterOverrideTest {
 
     @Autowired
     WebApplicationContext webApplicationContext;
@@ -55,25 +54,9 @@ class HttpExchangeLoggingFilterSamplingTest {
     }
 
     @Test
-    void doFilter_whenSamplingRateIsZero_emitsNoEventsButStillHandlesRequest() throws Exception {
+    void doFilter_whenGlobalFullOverrideActive_logsBodyAndReportsBothModes() throws Exception {
 
-        // given / when
-        MvcResult result = mockMvc().perform(post("/api/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"productId\":\"p_1\"}"))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        // then the request went through untouched, the request id is still issued, but nothing is logged
-        assertThat(sink.getEvents()).isEmpty();
-        assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
-        assertThat(result.getResponse().getContentAsString()).contains("ord_456");
-    }
-
-    @Test
-    void doFilter_whenRuntimeOverrideActive_bypassesSampling() throws Exception {
-
-        // given sampling.rate=0 but an explicit runtime override
+        // given
         overrideManager.setGlobalOverride(HttpLogMode.FULL, null);
 
         // when
@@ -82,9 +65,54 @@ class HttpExchangeLoggingFilterSamplingTest {
                         .content("{\"productId\":\"p_1\"}"))
                 .andExpect(status().isOk());
 
-        // then the exchange is logged despite the zero sampling rate
+        // then
+        HttpExchangeLogEvent event = sink.last();
+        assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.BASIC);
+        assertThat(event.getEffectiveMode()).isEqualTo(HttpLogMode.FULL);
+        assertThat(event.getRequestBody()).isNotNull();
+    }
+
+    @Test
+    void doFilter_whenPatternOffOverrideActive_suppressesLoggingOnlyForMatchingPaths() throws Exception {
+
+        // given
+        overrideManager.setPatternOverride("/api/orders/**", HttpLogMode.OFF, null);
+
+        // when a matching endpoint is called
+        mockMvc().perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"p_1\"}"))
+                .andExpect(status().isOk());
+
+        // then nothing is logged for it
+        assertThat(sink.getEvents()).isEmpty();
+
+        // when a non-matching endpoint is called
+        mockMvc().perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"keyboard\"}"))
+                .andExpect(status().isOk());
+
+        // then the configured mode still applies there
         assertThat(sink.getEvents()).hasSize(1);
-        assertThat(sink.last().getEffectiveMode()).isEqualTo(HttpLogMode.FULL);
+    }
+
+    @Test
+    void doFilter_whenNoOverride_usesConfiguredMode() throws Exception {
+
+        // given no override
+
+        // when
+        mockMvc().perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"p_1\"}"))
+                .andExpect(status().isOk());
+
+        // then
+        HttpExchangeLogEvent event = sink.last();
+        assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.BASIC);
+        assertThat(event.getEffectiveMode()).isEqualTo(HttpLogMode.BASIC);
+        assertThat(event.getRequestBody()).isNull();
     }
 
     @SpringBootConfiguration

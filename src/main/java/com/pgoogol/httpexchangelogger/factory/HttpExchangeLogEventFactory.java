@@ -69,9 +69,9 @@ public class HttpExchangeLogEventFactory {
         return current;
     }
 
-    public HttpExchangeLogEvent create(HttpServletRequest request, byte[] requestBody, ContentCachingResponseWrapper response, HttpLogMode mode, String requestId, long durationMs, Throwable exception) {
+    public HttpExchangeLogEvent create(HttpServletRequest request, byte[] requestBody, ContentCachingResponseWrapper response, HttpLogMode configuredMode, HttpLogMode effectiveMode, String requestId, long durationMs, Throwable exception) {
 
-        HttpExchangeLogEvent.Builder builder = HttpExchangeLogEvent.builder().requestId(requestId).method(request.getMethod()).path(request.getRequestURI()).status(resolveStatus(response, exception)).durationMs(durationMs).configuredMode(mode).effectiveMode(mode);
+        HttpExchangeLogEvent.Builder builder = HttpExchangeLogEvent.builder().requestId(requestId).method(request.getMethod()).path(request.getRequestURI()).status(resolveStatus(response, exception)).durationMs(durationMs).configuredMode(configuredMode).effectiveMode(effectiveMode);
 
         HttpExchangeLoggerProperties.Include propertiesInclude = properties.getInclude();
         if (propertiesInclude.isQueryString()) {
@@ -86,7 +86,7 @@ public class HttpExchangeLogEventFactory {
             builder.exceptionMessage(root.getMessage());
         }
 
-        if (CollectionUtils.containsInstance(Set.of(HttpLogMode.BASIC, HttpLogMode.OFF), mode)) {
+        if (CollectionUtils.containsInstance(Set.of(HttpLogMode.BASIC, HttpLogMode.OFF), effectiveMode)) {
 
             return builder.build();
         }
@@ -102,7 +102,7 @@ public class HttpExchangeLogEventFactory {
             builder.responseHeaders(sanitizeHeaders(extractResponseHeaders(response)));
         }
 
-        int bodyCap = effectiveBodyCap(mode);
+        int bodyCap = effectiveBodyCap(effectiveMode);
         applyRequestBody(request, requestBody, builder, bodyCap);
         applyResponseBody(response, builder, bodyCap);
 
