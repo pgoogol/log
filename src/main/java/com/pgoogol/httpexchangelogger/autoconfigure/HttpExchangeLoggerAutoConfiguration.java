@@ -3,6 +3,7 @@ package com.pgoogol.httpexchangelogger.autoconfigure;
 import com.pgoogol.httpexchangelogger.factory.HttpExchangeLogEventFactory;
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
+import com.pgoogol.httpexchangelogger.resolver.ExchangeSampler;
 import com.pgoogol.httpexchangelogger.sanitizer.BodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.DefaultBodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.DefaultHeaderSanitizer;
@@ -50,6 +51,13 @@ public class HttpExchangeLoggerAutoConfiguration {
     public EndpointLoggingModeResolver endpointLoggingModeResolver(HttpExchangeLoggerProperties properties) {
 
         return new EndpointLoggingModeResolver(properties);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ExchangeSampler exchangeSampler(HttpExchangeLoggerProperties properties) {
+
+        return new ExchangeSampler(properties);
     }
 
     @Bean
@@ -163,9 +171,10 @@ public class HttpExchangeLoggerAutoConfiguration {
                                                                EndpointLoggingModeResolver modeResolver,
                                                                HttpExchangeLogEventFactory eventFactory,
                                                                @Qualifier("httpExchangeLogSink") HttpExchangeLogSink sink,
-                                                               RequestIdProvider requestIdProvider) {
+                                                               RequestIdProvider requestIdProvider,
+                                                               ExchangeSampler sampler) {
 
-        return new HttpExchangeLoggingFilter(properties, modeResolver, eventFactory, sink, requestIdProvider);
+        return new HttpExchangeLoggingFilter(properties, modeResolver, eventFactory, sink, requestIdProvider, sampler);
     }
 
     @Bean

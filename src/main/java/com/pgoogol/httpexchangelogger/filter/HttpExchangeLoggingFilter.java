@@ -5,6 +5,7 @@ import com.pgoogol.httpexchangelogger.factory.HttpExchangeLogEventFactory;
 import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
+import com.pgoogol.httpexchangelogger.resolver.ExchangeSampler;
 import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.support.CachedBodyHttpServletRequest;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
@@ -31,18 +32,21 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
     private final HttpExchangeLogEventFactory eventFactory;
     private final HttpExchangeLogSink sink;
     private final RequestIdProvider requestIdProvider;
+    private final ExchangeSampler sampler;
 
     public HttpExchangeLoggingFilter(HttpExchangeLoggerProperties properties,
                                      EndpointLoggingModeResolver modeResolver,
                                      HttpExchangeLogEventFactory eventFactory,
                                      HttpExchangeLogSink sink,
-                                     RequestIdProvider requestIdProvider) {
+                                     RequestIdProvider requestIdProvider,
+                                     ExchangeSampler sampler) {
 
         this.properties = properties;
         this.modeResolver = modeResolver;
         this.eventFactory = eventFactory;
         this.sink = sink;
         this.requestIdProvider = requestIdProvider;
+        this.sampler = sampler;
     }
 
     private static int resolveCacheLimit(int maxBodyLength) {
@@ -77,6 +81,12 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         String requestId = requestIdProvider.getOrCreateRequestId(request, response);
 
         if (mode == HttpLogMode.OFF) {
+
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (!sampler.shouldSample(request.getRequestURI())) {
 
             filterChain.doFilter(request, response);
             return;

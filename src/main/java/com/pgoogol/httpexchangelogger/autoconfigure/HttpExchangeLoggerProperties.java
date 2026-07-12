@@ -34,6 +34,8 @@ public class HttpExchangeLoggerProperties {
 
     private Mask mask = new Mask();
 
+    private Sampling sampling = new Sampling();
+
     private List<Endpoint> endpoints = new ArrayList<>();
 
     public boolean isEnabled() {
@@ -124,6 +126,16 @@ public class HttpExchangeLoggerProperties {
     public void setMask(Mask mask) {
 
         this.mask = mask;
+    }
+
+    public Sampling getSampling() {
+
+        return sampling;
+    }
+
+    public void setSampling(Sampling sampling) {
+
+        this.sampling = sampling;
     }
 
     public List<Endpoint> getEndpoints() {
@@ -264,10 +276,34 @@ public class HttpExchangeLoggerProperties {
 
     }
 
+    public static class Sampling {
+
+        /**
+         * Fraction of exchanges that are logged (0.0 - 1.0). 1.0 logs everything.
+         */
+        private double rate = 1.0d;
+
+        public double getRate() {
+
+            return rate;
+        }
+
+        public void setRate(double rate) {
+
+            this.rate = rate;
+        }
+
+    }
+
     public static class Endpoint {
 
         private String pattern;
         private HttpLogMode mode;
+
+        /**
+         * Optional per-endpoint sampling rate overriding {@code sampling.rate}.
+         */
+        private Double sampleRate;
 
         public String getPattern() {
 
@@ -287,6 +323,16 @@ public class HttpExchangeLoggerProperties {
         public void setMode(HttpLogMode mode) {
 
             this.mode = mode;
+        }
+
+        public Double getSampleRate() {
+
+            return sampleRate;
+        }
+
+        public void setSampleRate(Double sampleRate) {
+
+            this.sampleRate = sampleRate;
         }
 
     }
