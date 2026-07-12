@@ -8,6 +8,7 @@ import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.resolver.ExchangeSampler;
 import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
 import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.support.BoundedBodyCaptureHttpServletResponse;
 import com.pgoogol.httpexchangelogger.support.CachedBodyHttpServletRequest;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
@@ -19,7 +20,6 @@ import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -102,7 +102,10 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         }
 
         int cacheLimit = resolveCacheLimit(properties.getMaxBodyLength());
-        ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
+        // The response streams through to the container; only the first cacheLimit bytes are
+        // retained for logging, so memory stays bounded no matter how large the response is.
+        BoundedBodyCaptureHttpServletResponse wrappedResponse =
+                new BoundedBodyCaptureHttpServletResponse(response, cacheLimit);
 
         // Eagerly buffer bounded textual bodies so they are logged even when the handler never
         // reads them. Everything else (form, multipart, binary, large or unknown-length bodies)
@@ -126,6 +129,9 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             throw ex;
         } finally {
 
+            // Characters the handler wrote via getWriter() but never flushed still sit in the
+            // wrapper's writer; push them to the container before building the event.
+            wrappedResponse.flushCapturedWriter();
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
 
@@ -147,9 +153,6 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             } catch (RuntimeException loggingException) {
 
                 LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
-            } finally {
-
-                copyBodyToResponse(wrappedResponse, exception);
             }
         }
     }
@@ -170,25 +173,6 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         }
         long length = request.getContentLengthLong();
         return length > 0 && length <= cacheLimit;
-    }
-
-    private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, Throwable inFlight)
-            throws IOException {
-
-        try {
-
-            wrappedResponse.copyBodyToResponse();
-        } catch (IOException copyException) {
-
-            // Never let a copy failure mask the exception that is already propagating.
-            if (Objects.nonNull(inFlight)) {
-
-                inFlight.addSuppressed(copyException);
-            } else {
-
-                throw copyException;
-            }
-        }
     }
 
 }

@@ -4,7 +4,7 @@ Spring Boot starter, ktory automatycznie loguje requesty i response HTTP w aplik
 
 Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami per endpoint, maskowaniem danych wrazliwych i limitem dlugosci body.
 
-Poza logowaniem do konsoli wspiera: file sink (JSON Lines), metryki Micrometer, sampling, logowanie asynchroniczne, czasowe nadpisywanie trybu w runtime (admin endpoint actuatora, TTL) oraz korelacje z tracingiem (traceId/spanId, atrybuty OpenTelemetry).
+Poza logowaniem do konsoli wspiera: file sink (JSON Lines), sampling, logowanie asynchroniczne, czasowe nadpisywanie trybu w runtime (admin endpoint actuatora, TTL) oraz korelacje z tracingiem (traceId/spanId, atrybuty OpenTelemetry).
 
 Pelna referencja wszystkich opcji konfiguracyjnych (z wartosciami domyslnymi, tabela i gotowymi scenariuszami): [docs/configuration.md](docs/configuration.md).
 
@@ -196,7 +196,7 @@ Przyklad:
 
 ## Sinki
 
-Dzialaja trzy wbudowane sinki: console, file i observability. Kazdy wlacza sie osobnym przelacznikiem:
+Dzialaja dwa wbudowane sinki: console i file. Kazdy wlacza sie osobnym przelacznikiem:
 
 ```yaml
 http-exchange-logger:
@@ -204,16 +204,13 @@ http-exchange-logger:
     console: true                        # SLF4J logger http.exchange.logger (domyslnie wlaczony)
     file: true                           # JSON Lines do pliku
     file-path: logs/http-exchange.log    # cel file sinka (domyslna wartosc)
-    observability: true                  # timer http.exchange w Micrometer
 ```
+
+Metryki HTTP (timer per request) sa poza zakresem biblioteki — Spring Boot z Micrometerem dostarcza je out of the box jako `http.server.requests`; duplikowanie tego timera nie ma sensu.
 
 ### File sink
 
 Kazdy exchange to jedna linia JSON dopisywana do pliku (`sink.file-path`, katalogi tworzone automatycznie), niezaleznie od konfiguracji loggerow aplikacji. Sink nigdy nie psuje obslugi requestu: gdy pliku nie da sie otworzyc, degraduje sie do no-op (log ERROR przy starcie), a bledy zapisu sa zliczane i raportowane co jakis czas WARN-em.
-
-### Observability sink
-
-Wymaga `micrometer-core` na classpath (zaleznosc opcjonalna). Rejestruje timer `http.exchange` z tagami o niskiej kardynalnosci: `method`, `status`, `outcome`, `mode`, `exception`. Sciezka requestu celowo **nie** jest tagiem (nieograniczona kardynalnosc). `MeterRegistry` jest rozwiazywany leniwie - brak registry oznacza no-op.
 
 ### Wlasne sinki
 
@@ -363,7 +360,6 @@ Starter dziala bez dodatkowych zaleznosci (console/file sink, sampling, async, o
 | Funkcja | Wymagana zaleznosc |
 |---|---|
 | Admin endpoint `httpexchangelogger` | `spring-boot-starter-actuator` |
-| Observability sink (timer `http.exchange`) | `micrometer-core` |
 | `traceId`/`spanId` z beana `Tracer` | `micrometer-tracing` (bridge wg uzywanego tracera) |
 | Atrybuty spanow OpenTelemetry | `opentelemetry-api` |
 
@@ -373,7 +369,7 @@ Bez tych zaleznosci odpowiadajace auto-konfiguracje po prostu sie nie aktywuja.
 
 ## Uwagi techniczne
 
-- Response body jest buforowane w pamieci przez `ContentCachingResponseWrapper` (standard Spring) zanim zostanie ograniczone przez `max-body-length`. Dla bardzo duzych odpowiedzi oznacza to chwilowe zuzycie pamieci proporcjonalne do rozmiaru odpowiedzi. Request body jest buforowane z gornym limitem.
+- Response body jest przechwytywane do bufora o ograniczonym rozmiarze (ok. `4 * max-body-length` bajtow) — reszta odpowiedzi plynie bezposrednio do klienta (write-through), wiec zuzycie pamieci jest stale niezaleznie od rozmiaru odpowiedzi. Gdy odpowiedz przekroczy bufor, event dostaje `responseBodyTruncated: true`; przekroczony JSON/XML przy wlaczonym maskowaniu jest traktowany fail-closed (placeholder zamiast surowej tresci). Request body jest buforowane z gornym limitem.
 - Runtime overridy sa trzymane w pamieci procesu - w srodowisku wieloinstancyjnym override ustawiony przez admin endpoint dotyczy tylko instancji, ktora obsluzyla to wywolanie.
 - Event jest budowany po zakonczeniu obslugi requestu; atrybuty OpenTelemetry sa dopisywane do biezacego spana, o ile w tym momencie nadal jest aktywny.
 

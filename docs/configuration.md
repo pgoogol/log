@@ -43,9 +43,6 @@ http-exchange-logger:
     file: false
     # Sciezka file sinka; katalogi nadrzedne tworzone automatycznie przy starcie.
     file-path: logs/http-exchange.log
-    # Timer Micrometer "http.exchange" (tagi: method, status, outcome, mode, exception).
-    # Wymaga micrometer-core na classpath; brak MeterRegistry = no-op.
-    observability: false
 
   # ---------- Zakres danych w evencie ----------
   include:
@@ -140,7 +137,6 @@ management:
 | `sink.console` | boolean | `true` | Sink SLF4J (`http.exchange.logger`) |
 | `sink.file` | boolean | `false` | Sink plikowy JSON Lines |
 | `sink.file-path` | String | `logs/http-exchange.log` | Plik docelowy file sinka |
-| `sink.observability` | boolean | `false` | Timer Micrometer `http.exchange` |
 | `include.headers` | boolean | `true` | Czy logowac naglowki |
 | `include.query-string` | boolean | `true` | Czy logowac query string |
 | `include.client-ip` | boolean | `true` | Czy logowac IP klienta |
@@ -173,7 +169,10 @@ logging:
     http.exchange.logger: INFO
 ```
 
-### Produkcja — bezpieczny minimalizm + metryki + awaryjne wlaczanie FULL
+### Produkcja — bezpieczny minimalizm + awaryjne wlaczanie FULL
+
+Metryki HTTP (timer per request) zapewnia sam Spring Boot z Micrometerem
+(`http.server.requests`) — biblioteka ich nie duplikuje.
 
 ```yaml
 http-exchange-logger:
@@ -181,7 +180,6 @@ http-exchange-logger:
   require-ttl-for-full-logging: true    # FULL z override'u zawsze wygasnie
   sink:
     console: true
-    observability: true                 # wymaga micrometer-core
   endpoints:
     - pattern: /actuator/**
       mode: OFF
