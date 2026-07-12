@@ -13,6 +13,7 @@ import com.pgoogol.httpexchangelogger.sanitizer.JsonBodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.SensitiveValueMasker;
 import com.pgoogol.httpexchangelogger.sanitizer.XmlBodySanitizer;
 import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
+import com.pgoogol.httpexchangelogger.sink.AsyncHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.CompositeHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.ConsoleHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.FileHttpExchangeLogSink;
@@ -151,7 +152,8 @@ public class HttpExchangeLoggerAutoConfiguration {
     @Bean(name = "httpExchangeLogSink")
     @Primary
     @ConditionalOnMissingBean(name = "httpExchangeLogSink")
-    public HttpExchangeLogSink httpExchangeLogSink(ObjectProvider<List<HttpExchangeLogSink>> contributedSinks) {
+    public HttpExchangeLogSink httpExchangeLogSink(HttpExchangeLoggerProperties properties,
+                                                   ObjectProvider<List<HttpExchangeLogSink>> contributedSinks) {
 
         // A collection descriptor never falls back to a self reference, so resolving the
         // contributed sinks here cannot recurse into the bean currently being created.
@@ -159,10 +161,12 @@ public class HttpExchangeLoggerAutoConfiguration {
         if (sinks.isEmpty()) {
             return new NoopHttpExchangeLogSink();
         }
-        if (sinks.size() == 1) {
-            return sinks.getFirst();
+        HttpExchangeLogSink composed = sinks.size() == 1 ? sinks.getFirst() : new CompositeHttpExchangeLogSink(sinks);
+        HttpExchangeLoggerProperties.Async async = properties.getAsync();
+        if (async.isEnabled()) {
+            return new AsyncHttpExchangeLogSink(composed, async.getQueueCapacity(), async.getShutdownTimeoutMs());
         }
-        return new CompositeHttpExchangeLogSink(sinks);
+        return composed;
     }
 
     @Bean

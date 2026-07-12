@@ -36,6 +36,8 @@ public class HttpExchangeLoggerProperties {
 
     private Sampling sampling = new Sampling();
 
+    private Async async = new Async();
+
     private List<Endpoint> endpoints = new ArrayList<>();
 
     public boolean isEnabled() {
@@ -136,6 +138,16 @@ public class HttpExchangeLoggerProperties {
     public void setSampling(Sampling sampling) {
 
         this.sampling = sampling;
+    }
+
+    public Async getAsync() {
+
+        return async;
+    }
+
+    public void setAsync(Async async) {
+
+        this.async = async;
     }
 
     public List<Endpoint> getEndpoints() {
@@ -291,6 +303,53 @@ public class HttpExchangeLoggerProperties {
         public void setRate(double rate) {
 
             this.rate = rate;
+        }
+
+    }
+
+    public static class Async {
+
+        private boolean enabled = false;
+
+        /**
+         * Bounded queue between request threads and the sink worker; when full,
+         * events are dropped (never blocking the request).
+         */
+        private int queueCapacity = 1_000;
+
+        /**
+         * How long shutdown waits for queued events to be flushed to the sinks.
+         */
+        private long shutdownTimeoutMs = 2_000;
+
+        public boolean isEnabled() {
+
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+
+            this.enabled = enabled;
+        }
+
+        public int getQueueCapacity() {
+
+            return queueCapacity;
+        }
+
+        public void setQueueCapacity(int queueCapacity) {
+
+            this.queueCapacity = queueCapacity;
+        }
+
+        public long getShutdownTimeoutMs() {
+
+            return shutdownTimeoutMs;
+        }
+
+        public void setShutdownTimeoutMs(long shutdownTimeoutMs) {
+
+            this.shutdownTimeoutMs = shutdownTimeoutMs;
         }
 
     }

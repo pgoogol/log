@@ -7,6 +7,7 @@ import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.sanitizer.BodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.HeaderSanitizer;
 import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
+import com.pgoogol.httpexchangelogger.sink.AsyncHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.CompositeHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.ConsoleHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.FileHttpExchangeLogSink;
@@ -129,6 +130,34 @@ class HttpExchangeLoggerAutoConfigurationTest {
             CompositeHttpExchangeLogSink composite = (CompositeHttpExchangeLogSink) sink;
             assertThat(composite.getDelegates())
                     .hasExactlyElementsOfTypes(ConsoleHttpExchangeLogSink.class, FileHttpExchangeLogSink.class);
+        });
+    }
+
+    @Test
+    void autoConfiguration_whenAsyncEnabled_wrapsSinkInAsyncSink() {
+
+        // given
+        webRunner.withPropertyValues("http-exchange-logger.async.enabled=true"
+        // when
+        ).run(ctx -> {
+            // then
+            HttpExchangeLogSink sink = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
+            assertThat(sink).isInstanceOf(AsyncHttpExchangeLogSink.class);
+        });
+    }
+
+    @Test
+    void autoConfiguration_whenAsyncEnabledButNoSinkActive_staysNoop() {
+
+        // given
+        webRunner.withPropertyValues(
+                "http-exchange-logger.async.enabled=true",
+                "http-exchange-logger.sink.console=false"
+        // when
+        ).run(ctx -> {
+            // then
+            HttpExchangeLogSink sink = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
+            assertThat(sink).isInstanceOf(NoopHttpExchangeLogSink.class);
         });
     }
 
