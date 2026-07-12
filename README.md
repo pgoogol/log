@@ -6,6 +6,8 @@ Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami pe
 
 Poza logowaniem do konsoli wspiera: file sink (JSON Lines), metryki Micrometer, sampling, logowanie asynchroniczne, czasowe nadpisywanie trybu w runtime (admin endpoint actuatora, TTL) oraz korelacje z tracingiem (traceId/spanId, atrybuty OpenTelemetry).
 
+Pelna referencja wszystkich opcji konfiguracyjnych (z wartosciami domyslnymi, tabela i gotowymi scenariuszami): [docs/configuration.md](docs/configuration.md).
+
 ---
 
 ## Wymagania
