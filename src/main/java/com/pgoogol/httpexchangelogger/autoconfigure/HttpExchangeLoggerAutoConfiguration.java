@@ -14,6 +14,7 @@ import com.pgoogol.httpexchangelogger.sanitizer.XmlBodySanitizer;
 import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
 import com.pgoogol.httpexchangelogger.sink.CompositeHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.ConsoleHttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.sink.FileHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.NoopHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.support.ClientIpExtractor;
@@ -21,18 +22,21 @@ import com.pgoogol.httpexchangelogger.support.DefaultClientIpExtractor;
 import com.pgoogol.httpexchangelogger.support.DefaultRequestIdProvider;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.ArrayList;
+import java.nio.file.Path;
 import java.util.List;
 
 @AutoConfiguration
@@ -114,15 +118,36 @@ public class HttpExchangeLoggerAutoConfiguration {
         return objectMapperProvider.getIfAvailable(() -> JsonMapper.builder().build());
     }
 
-    @Bean(name = "httpExchangeLogSink")
-    @ConditionalOnMissingBean(name = "httpExchangeLogSink")
-    public HttpExchangeLogSink httpExchangeLogSink(HttpExchangeLoggerProperties properties,
-                                                   HttpExchangeLogEventJsonWriter jsonWriter) {
+    @Bean(name = "consoleHttpExchangeLogSink")
+    @ConditionalOnMissingBean(name = {"consoleHttpExchangeLogSink", "httpExchangeLogSink"})
+    @ConditionalOnProperty(prefix = "http-exchange-logger.sink", name = "console",
+            havingValue = "true", matchIfMissing = true)
+    public ConsoleHttpExchangeLogSink consoleHttpExchangeLogSink(HttpExchangeLogEventJsonWriter jsonWriter) {
 
-        List<HttpExchangeLogSink> sinks = new ArrayList<>();
-        if (properties.getSink().isConsole()) {
-            sinks.add(new ConsoleHttpExchangeLogSink(jsonWriter));
-        }
+        return new ConsoleHttpExchangeLogSink(jsonWriter);
+    }
+
+    @Bean(name = "fileHttpExchangeLogSink")
+    @ConditionalOnMissingBean(name = {"fileHttpExchangeLogSink", "httpExchangeLogSink"})
+    @ConditionalOnProperty(prefix = "http-exchange-logger.sink", name = "file", havingValue = "true")
+    public FileHttpExchangeLogSink fileHttpExchangeLogSink(HttpExchangeLoggerProperties properties,
+                                                           HttpExchangeLogEventJsonWriter jsonWriter) {
+
+        return new FileHttpExchangeLogSink(jsonWriter, Path.of(properties.getSink().getFilePath()));
+    }
+
+    /**
+     * Aggregates every contributed {@link HttpExchangeLogSink} bean (console, file and any
+     * user-defined ones). A user bean named {@code httpExchangeLogSink} replaces the whole setup.
+     */
+    @Bean(name = "httpExchangeLogSink")
+    @Primary
+    @ConditionalOnMissingBean(name = "httpExchangeLogSink")
+    public HttpExchangeLogSink httpExchangeLogSink(ObjectProvider<List<HttpExchangeLogSink>> contributedSinks) {
+
+        // A collection descriptor never falls back to a self reference, so resolving the
+        // contributed sinks here cannot recurse into the bean currently being created.
+        List<HttpExchangeLogSink> sinks = contributedSinks.getIfAvailable(List::of);
         if (sinks.isEmpty()) {
             return new NoopHttpExchangeLogSink();
         }
@@ -137,7 +162,7 @@ public class HttpExchangeLoggerAutoConfiguration {
     public HttpExchangeLoggingFilter httpExchangeLoggingFilter(HttpExchangeLoggerProperties properties,
                                                                EndpointLoggingModeResolver modeResolver,
                                                                HttpExchangeLogEventFactory eventFactory,
-                                                               HttpExchangeLogSink sink,
+                                                               @Qualifier("httpExchangeLogSink") HttpExchangeLogSink sink,
                                                                RequestIdProvider requestIdProvider) {
 
         return new HttpExchangeLoggingFilter(properties, modeResolver, eventFactory, sink, requestIdProvider);

@@ -7,12 +7,15 @@ import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.sanitizer.BodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.HeaderSanitizer;
 import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
+import com.pgoogol.httpexchangelogger.sink.CompositeHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.ConsoleHttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.sink.FileHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.sink.NoopHttpExchangeLogSink;
 import com.pgoogol.httpexchangelogger.support.ClientIpExtractor;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -20,6 +23,8 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,10 +46,9 @@ class HttpExchangeLoggerAutoConfigurationTest {
             assertThat(ctx).hasSingleBean(ClientIpExtractor.class);
             assertThat(ctx).hasSingleBean(HttpExchangeLogEventJsonWriter.class);
             assertThat(ctx).hasSingleBean(HttpExchangeLogEventFactory.class);
-            assertThat(ctx).hasSingleBean(HttpExchangeLogSink.class);
             assertThat(ctx).hasSingleBean(HttpExchangeLoggingFilter.class);
 
-            HttpExchangeLogSink sink = ctx.getBean(HttpExchangeLogSink.class);
+            HttpExchangeLogSink sink = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
             assertThat(sink).isInstanceOf(ConsoleHttpExchangeLogSink.class);
         });
     }
@@ -80,18 +84,51 @@ class HttpExchangeLoggerAutoConfigurationTest {
     }
 
     @Test
-    void autoConfiguration_whenConsoleSinkDisabled_registersNoopSink() {
+    void autoConfiguration_whenAllSinksDisabled_registersNoopSink() {
+
+        // given
+        webRunner.withPropertyValues(
+                "http-exchange-logger.sink.console=false",
+                "http-exchange-logger.sink.file=false"
+        // when
+        ).run(ctx -> {
+            // then
+            HttpExchangeLogSink sink = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
+            assertThat(sink).isInstanceOf(NoopHttpExchangeLogSink.class);
+        });
+    }
+
+    @Test
+    void autoConfiguration_whenOnlyFileSinkEnabled_registersFileSink(@TempDir Path tempDir) {
 
         // given
         webRunner.withPropertyValues(
                 "http-exchange-logger.sink.console=false",
                 "http-exchange-logger.sink.file=true",
-                "http-exchange-logger.sink.observability=true"
+                "http-exchange-logger.sink.file-path=" + tempDir.resolve("http-exchange.log")
         // when
         ).run(ctx -> {
             // then
-            HttpExchangeLogSink sink = ctx.getBean(HttpExchangeLogSink.class);
-            assertThat(sink).isInstanceOf(NoopHttpExchangeLogSink.class);
+            HttpExchangeLogSink sink = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
+            assertThat(sink).isInstanceOf(FileHttpExchangeLogSink.class);
+        });
+    }
+
+    @Test
+    void autoConfiguration_whenConsoleAndFileSinksEnabled_registersCompositeOverBoth(@TempDir Path tempDir) {
+
+        // given
+        webRunner.withPropertyValues(
+                "http-exchange-logger.sink.file=true",
+                "http-exchange-logger.sink.file-path=" + tempDir.resolve("http-exchange.log")
+        // when
+        ).run(ctx -> {
+            // then
+            HttpExchangeLogSink sink = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
+            assertThat(sink).isInstanceOf(CompositeHttpExchangeLogSink.class);
+            CompositeHttpExchangeLogSink composite = (CompositeHttpExchangeLogSink) sink;
+            assertThat(composite.getDelegates())
+                    .hasExactlyElementsOfTypes(ConsoleHttpExchangeLogSink.class, FileHttpExchangeLogSink.class);
         });
     }
 

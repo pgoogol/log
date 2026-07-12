@@ -142,6 +142,11 @@ public class HttpExchangeLoggerProperties {
         private boolean file = false;
         private boolean observability = false;
 
+        /**
+         * Target file for the file sink; parent directories are created on startup.
+         */
+        private String filePath = "logs/http-exchange.log";
+
         public boolean isConsole() {
 
             return console;
@@ -160,6 +165,16 @@ public class HttpExchangeLoggerProperties {
         public void setFile(boolean file) {
 
             this.file = file;
+        }
+
+        public String getFilePath() {
+
+            return filePath;
+        }
+
+        public void setFilePath(String filePath) {
+
+            this.filePath = filePath;
         }
 
         public boolean isObservability() {
