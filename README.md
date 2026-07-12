@@ -4,6 +4,8 @@ Spring Boot starter, ktory automatycznie loguje requesty i response HTTP w aplik
 
 Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami per endpoint, maskowaniem danych wrazliwych i limitem dlugosci body.
 
+Poza logowaniem do konsoli wspiera: file sink (JSON Lines), metryki Micrometer, sampling, logowanie asynchroniczne, czasowe nadpisywanie trybu w runtime (admin endpoint actuatora, TTL) oraz korelacje z tracingiem (traceId/spanId, atrybuty OpenTelemetry).
+
 ---
 
 ## Wymagania
@@ -92,6 +94,9 @@ http-exchange-logger:
       mode: BASIC
     - pattern: /actuator/**
       mode: OFF
+    - pattern: /api/search/**
+      mode: BASIC
+      sample-rate: 0.1   # opcjonalnie: nadpisuje sampling.rate dla tej reguly
 ```
 
 Pierwsza pasujaca regula wygrywa. Brak dopasowania - uzywany jest `default-mode`.
@@ -180,37 +185,154 @@ Event jest serializowany jako jedna linia JSON i wysylany do loggera `http.excha
 Przyklad:
 
 ```json
-{"type":"http_exchange","requestId":"abc","method":"POST","path":"/api/orders","status":201,"durationMs":42,"configuredMode":"FULL","effectiveMode":"FULL"}
+{"type":"http_exchange","requestId":"abc","traceId":"4bf92f35","spanId":"00f067aa","method":"POST","path":"/api/orders","status":201,"durationMs":42,"configuredMode":"FULL","effectiveMode":"FULL"}
 ```
+
+`configuredMode` to tryb wynikajacy z konfiguracji statycznej, `effectiveMode` to tryb faktycznie zastosowany (moze sie roznic, gdy aktywny jest runtime override). `traceId`/`spanId` pojawiaja sie, gdy dostepny jest kontekst tracingu.
 
 ---
 
 ## Sinki
 
-W MVP dziala wylacznie console sink. Parametry `sink.file` i `sink.observability` istnieja w kontrakcie konfiguracji, ale w MVP nie maja efektu.
-
-Konfiguracja:
+Dzialaja trzy wbudowane sinki: console, file i observability. Kazdy wlacza sie osobnym przelacznikiem:
 
 ```yaml
 http-exchange-logger:
   sink:
-    console: true       # dziala
-    file: true          # ignorowane w MVP
-    observability: true # ignorowane w MVP
+    console: true                        # SLF4J logger http.exchange.logger (domyslnie wlaczony)
+    file: true                           # JSON Lines do pliku
+    file-path: logs/http-exchange.log    # cel file sinka (domyslna wartosc)
+    observability: true                  # timer http.exchange w Micrometer
 ```
 
-Aby zarejestrowac wlasny sink, zdefiniuj beana o nazwie `httpExchangeLogSink`:
+### File sink
+
+Kazdy exchange to jedna linia JSON dopisywana do pliku (`sink.file-path`, katalogi tworzone automatycznie), niezaleznie od konfiguracji loggerow aplikacji. Sink nigdy nie psuje obslugi requestu: gdy pliku nie da sie otworzyc, degraduje sie do no-op (log ERROR przy starcie), a bledy zapisu sa zliczane i raportowane co jakis czas WARN-em.
+
+### Observability sink
+
+Wymaga `micrometer-core` na classpath (zaleznosc opcjonalna). Rejestruje timer `http.exchange` z tagami o niskiej kardynalnosci: `method`, `status`, `outcome`, `mode`, `exception`. Sciezka requestu celowo **nie** jest tagiem (nieograniczona kardynalnosc). `MeterRegistry` jest rozwiazywany leniwie - brak registry oznacza no-op.
+
+### Wlasne sinki
+
+Beany typu `HttpExchangeLogSink` sa automatycznie zbierane do kompozytu, wiec wlasny dodatkowy sink wystarczy zarejestrowac jako zwykly bean:
+
+```java
+@Bean
+public HttpExchangeLogSink slackSink() {
+    return event -> { /* wlasna logika */ };
+}
+```
+
+Aby **zastapic** cala konfiguracje sinkow (wylaczajac wbudowane), zdefiniuj beana o nazwie `httpExchangeLogSink`:
 
 ```java
 @Bean(name = "httpExchangeLogSink")
 public HttpExchangeLogSink myCustomSink() {
-    return event -> {
-        // wlasna logika
-    };
+    return event -> { /* wlasna logika */ };
 }
 ```
 
-Alternatywnie mozna laczyc kilka sinkow w `CompositeHttpExchangeLogSink`.
+---
+
+## Sampling
+
+Ogranicza wolumen logow przy duzym ruchu. Globalny wspolczynnik (0.0 - 1.0, domyslnie 1.0 = loguj wszystko) oraz opcjonalne nadpisanie per regula endpointu:
+
+```yaml
+http-exchange-logger:
+  sampling:
+    rate: 0.2            # loguj ~20% exchange
+  endpoints:
+    - pattern: /api/orders/**
+      mode: FULL
+      sample-rate: 1.0   # zamowienia loguj zawsze
+```
+
+Requesty odrzucone przez sampling przechodza bez opakowywania (zero kosztu buforowania) i nadal dostaja `X-Request-Id`. Aktywny runtime override (patrz nizej) pomija sampling - skoro ktos jawnie wlaczyl logowanie, eventy nie moga znikac.
+
+---
+
+## Logowanie asynchroniczne
+
+Domyslnie eventy sa emitowane synchronicznie w watku requestu (po zakonczeniu obslugi). Dla sinkow o wyzszej latencji (np. file sink na wolnym dysku) mozna odsprzegnac emisje:
+
+```yaml
+http-exchange-logger:
+  async:
+    enabled: true
+    queue-capacity: 1000        # ograniczona kolejka
+    shutdown-timeout-ms: 2000   # ile czekac na oproznienie kolejki przy shutdownie
+```
+
+Watek requestu nigdy nie blokuje: gdy kolejka jest pelna, event jest odrzucany i zliczany (WARN co 100 odrzucen). Przy zamykaniu kontekstu kolejka jest oprozniana do sinkow w ramach `shutdown-timeout-ms`.
+
+---
+
+## Runtime overrides i admin endpoint
+
+Tryb logowania mozna czasowo nadpisac w dzialajacej aplikacji - globalnie albo per wzorzec sciezki, z opcjonalnym TTL, po ktorym nadpisanie samo wygasa (bez restartu i bez zmiany konfiguracji).
+
+Programowo, przez wstrzykniecie `RuntimeModeOverrideManager`:
+
+```java
+overrideManager.setPatternOverride("/api/orders/**", HttpLogMode.FULL, Duration.ofMinutes(10));
+overrideManager.setGlobalOverride(HttpLogMode.OFF, null);   // do odwolania
+overrideManager.clearAll();
+```
+
+Albo przez endpoint actuatora `httpexchangelogger` (wymaga zaleznosci actuatora i jawnego wystawienia):
+
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,httpexchangelogger
+```
+
+```text
+GET    /actuator/httpexchangelogger                 -> stan konfiguracji + aktywne overridy
+POST   /actuator/httpexchangelogger                 -> {"mode":"FULL","pattern":"/api/orders/**","ttlSeconds":600}
+DELETE /actuator/httpexchangelogger?pattern=...     -> usun jeden override (bez pattern: usun wszystkie)
+```
+
+W evencie widac wtedy roznice: `configuredMode` pokazuje tryb z konfiguracji, `effectiveMode` tryb narzucony przez override.
+
+**Bezpieczenstwo**: endpoint nie jest wystawiony domyslnie. Po wystawieniu ogranicz do niego dostep tak jak do reszty actuatora - siec wewnetrzna albo rola ADMIN (zgodnie z polityka bezpieczenstwa aplikacji).
+
+### `require-ttl-for-full-logging`
+
+```yaml
+http-exchange-logger:
+  require-ttl-for-full-logging: true
+```
+
+Gdy `true`, runtime override na `FULL` **musi** miec TTL - nadpisanie bez TTL jest odrzucane (`400` z endpointu, `IllegalArgumentException` z API). Chroni to przed "tymczasowym" wlaczeniem pelnego logowania, ktore zostaje na zawsze. Statycznie skonfigurowany `FULL` (w `endpoints` / `default-mode`) dziala niezaleznie od tej flagi.
+
+---
+
+## Tracing i OpenTelemetry
+
+### traceId / spanId w evencie
+
+Kazdy event moze zawierac `traceId` i `spanId`:
+
+- domyslnie odczytywane z MDC (klucze `traceId`/`spanId` - tak propaguje je micrometer-tracing),
+- gdy `micrometer-tracing` jest na classpath, uzywany jest bean `Tracer` (z fallbackiem do MDC),
+- wlasna integracje mozna podpiac przez beana `TraceContextProvider`.
+
+### Atrybuty OpenTelemetry
+
+Gdy `opentelemetry-api` jest na classpath, biezacy span jest wzbogacany o atrybuty exchange: `http.request.method`, `http.response.status_code`, `url.path` oraz `http_exchange.request_id`, `http_exchange.mode`, `http_exchange.duration_ms` i informacje o wyjatku. Do spanow **nigdy** nie trafiaja body ani headery.
+
+Wylaczenie:
+
+```yaml
+http-exchange-logger:
+  tracing:
+    otel-span-attributes: false
+```
 
 ---
 
@@ -218,40 +340,40 @@ Alternatywnie mozna laczyc kilka sinkow w `CompositeHttpExchangeLogSink`.
 
 Wszystkie domyslne beany sa zarejestrowane z `@ConditionalOnMissingBean`. Mozna nadpisac:
 
-- `HttpExchangeLogSink` (bean o nazwie `httpExchangeLogSink`)
+- `HttpExchangeLogSink` (bean o nazwie `httpExchangeLogSink` zastepuje caly zestaw sinkow; inne beany tego typu sa dolaczane do kompozytu)
 - `BodySanitizer`
 - `HeaderSanitizer`
 - `RequestIdProvider`
 - `ClientIpExtractor`
+- `TraceContextProvider`
 - `EndpointLoggingModeResolver`
+- `ExchangeSampler`
+- `RuntimeModeOverrideManager`
 - `HttpExchangeLogEventFactory`
 - `HttpExchangeLogEventJsonWriter`
 
 ---
 
-## Parametr `require-ttl-for-full-logging`
+## Zaleznosci opcjonalne
 
-```yaml
-http-exchange-logger:
-  require-ttl-for-full-logging: false
-```
+Starter dziala bez dodatkowych zaleznosci (console/file sink, sampling, async, overridy programowe). Poszczegolne integracje aktywuja sie, gdy aplikacja ma na classpath:
 
-W MVP parametr jest tylko mapowany z konfiguracji. Aplikacja moze go ustawic, ale biblioteka go ignoruje - `FULL` dziala zgodnie z konfiguracja endpointow i `default-mode`. Parametr jest zarezerwowany pod przyszly mechanizm dynamicznego, czasowego wlaczania logowania (TTL).
+| Funkcja | Wymagana zaleznosc |
+|---|---|
+| Admin endpoint `httpexchangelogger` | `spring-boot-starter-actuator` |
+| Observability sink (timer `http.exchange`) | `micrometer-core` |
+| `traceId`/`spanId` z beana `Tracer` | `micrometer-tracing` (bridge wg uzywanego tracera) |
+| Atrybuty spanow OpenTelemetry | `opentelemetry-api` |
+
+Bez tych zaleznosci odpowiadajace auto-konfiguracje po prostu sie nie aktywuja.
 
 ---
 
-## Ograniczenia MVP
+## Uwagi techniczne
 
-Poza pierwsza wersja zostaje:
-
-- file sink,
-- observability sink (Micrometer, OpenTelemetry),
-- admin endpoint do czasowej zmiany trybu logowania,
-- dynamiczne TTL,
-- asynchroniczne logowanie,
-- sampling.
-
-Uwaga techniczna: response body jest buforowane w pamieci przez `ContentCachingResponseWrapper` (standard Spring) zanim zostanie ograniczone przez `max-body-length`. Dla bardzo duzych odpowiedzi oznacza to chwilowe zuzycie pamieci proporcjonalne do rozmiaru odpowiedzi. Request body jest buforowane z gornym limitem.
+- Response body jest buforowane w pamieci przez `ContentCachingResponseWrapper` (standard Spring) zanim zostanie ograniczone przez `max-body-length`. Dla bardzo duzych odpowiedzi oznacza to chwilowe zuzycie pamieci proporcjonalne do rozmiaru odpowiedzi. Request body jest buforowane z gornym limitem.
+- Runtime overridy sa trzymane w pamieci procesu - w srodowisku wieloinstancyjnym override ustawiony przez admin endpoint dotyczy tylko instancji, ktora obsluzyla to wywolanie.
+- Event jest budowany po zakonczeniu obslugi requestu; atrybuty OpenTelemetry sa dopisywane do biezacego spana, o ile w tym momencie nadal jest aktywny.
 
 ---
 
