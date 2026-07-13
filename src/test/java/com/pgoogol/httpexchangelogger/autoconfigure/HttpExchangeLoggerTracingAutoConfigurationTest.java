@@ -1,11 +1,9 @@
 package com.pgoogol.httpexchangelogger.autoconfigure;
 
-import com.pgoogol.httpexchangelogger.sink.CompositeHttpExchangeLogSink;
-import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
-import com.pgoogol.httpexchangelogger.sink.OpenTelemetrySpanAttributesSink;
 import com.pgoogol.httpexchangelogger.support.MdcTraceContextProvider;
 import com.pgoogol.httpexchangelogger.support.TraceContextProvider;
 import com.pgoogol.httpexchangelogger.tracing.MicrometerTraceContextProvider;
+import com.pgoogol.httpexchangelogger.tracing.OpenTelemetrySpanAttributesEnricher;
 import io.micrometer.tracing.Tracer;
 import io.opentelemetry.api.trace.Span;
 import org.junit.jupiter.api.Test;
@@ -48,26 +46,23 @@ class HttpExchangeLoggerTracingAutoConfigurationTest {
     }
 
     @Test
-    void openTelemetryAutoConfiguration_whenOtelApiOnClasspath_contributesSpanAttributesSink() {
+    void openTelemetryAutoConfiguration_whenOtelApiOnClasspath_contributesSpanAttributesEnricher() {
 
         // given default properties / when
-        webRunner.run(ctx -> {
-            // then
-            assertThat(ctx).hasSingleBean(OpenTelemetrySpanAttributesSink.class);
-            HttpExchangeLogSink primary = ctx.getBean("httpExchangeLogSink", HttpExchangeLogSink.class);
-            assertThat(primary).isInstanceOf(CompositeHttpExchangeLogSink.class);
-        });
+        webRunner.run(ctx ->
+                // then
+                assertThat(ctx).hasSingleBean(OpenTelemetrySpanAttributesEnricher.class));
     }
 
     @Test
-    void openTelemetryAutoConfiguration_whenDisabledByProperty_registersNoSpanAttributesSink() {
+    void openTelemetryAutoConfiguration_whenDisabledByProperty_registersNoSpanAttributesEnricher() {
 
         // given
         webRunner.withPropertyValues("http-exchange-logger.tracing.otel-span-attributes=false"
                 // when
         ).run(ctx ->
                 // then
-                assertThat(ctx).doesNotHaveBean(OpenTelemetrySpanAttributesSink.class));
+                assertThat(ctx).doesNotHaveBean(OpenTelemetrySpanAttributesEnricher.class));
     }
 
     @Test
@@ -78,7 +73,7 @@ class HttpExchangeLoggerTracingAutoConfigurationTest {
                 // when
                 .run(ctx ->
                         // then
-                        assertThat(ctx).doesNotHaveBean(OpenTelemetrySpanAttributesSink.class));
+                        assertThat(ctx).doesNotHaveBean(OpenTelemetrySpanAttributesEnricher.class));
     }
 
 }

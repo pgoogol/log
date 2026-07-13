@@ -1,9 +1,8 @@
 package com.pgoogol.httpexchangelogger.integration;
 
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
-import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
-import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -18,7 +17,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,11 +52,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class HttpExchangeLoggingFilterIntegrationTest {
 
-    @Autowired
-    WebApplicationContext webApplicationContext;
+    private final HttpExchangeLogCapture logs = new HttpExchangeLogCapture();
 
     @Autowired
-    RecordingHttpExchangeLogSink sink;
+    WebApplicationContext webApplicationContext;
 
     @Autowired
     HttpExchangeLoggingFilter filter;
@@ -70,10 +67,16 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .build();
     }
 
-    @AfterEach
-    void clearSink() {
+    @BeforeEach
+    void attachCapture() {
 
-        sink.clear();
+        logs.attach();
+    }
+
+    @AfterEach
+    void detachCapture() {
+
+        logs.detach();
     }
 
     @Test
@@ -89,16 +92,16 @@ class HttpExchangeLoggingFilterIntegrationTest {
         // then
         assertThat(result.getResponse().getContentAsString()).contains("fake-token");
 
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getMethod()).isEqualTo("POST");
-        assertThat(event.getPath()).isEqualTo("/api/auth/login");
-        assertThat(event.getStatus()).isEqualTo(200);
-        assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.BASIC);
-        assertThat(event.getRequestBody()).isNull();
-        assertThat(event.getResponseBody()).isNull();
-        assertThat(event.getRequestHeaders()).isNull();
-        assertThat(event.getResponseHeaders()).isNull();
-        assertThat(event.getRequestId()).isNotBlank();
+        JsonNode event = logs.last();
+        assertThat(event.path("method").asString()).isEqualTo("POST");
+        assertThat(event.path("path").asString()).isEqualTo("/api/auth/login");
+        assertThat(event.path("status").asInt()).isEqualTo(200);
+        assertThat(event.path("configuredMode").asString()).isEqualTo("BASIC");
+        assertThat(event.path("requestBody").isMissingNode()).isTrue();
+        assertThat(event.path("responseBody").isMissingNode()).isTrue();
+        assertThat(event.path("requestHeaders").isMissingNode()).isTrue();
+        assertThat(event.path("responseHeaders").isMissingNode()).isTrue();
+        assertThat(event.path("requestId").asString()).isNotBlank();
     }
 
     @Test
@@ -109,7 +112,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        assertThat(sink.getEvents()).isEmpty();
+        assertThat(logs.getEvents()).isEmpty();
     }
 
     @Test
@@ -121,7 +124,7 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andReturn();
 
         // then
-        assertThat(sink.getEvents()).isEmpty();
+        assertThat(logs.getEvents()).isEmpty();
         assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
     }
 
@@ -139,16 +142,15 @@ class HttpExchangeLoggingFilterIntegrationTest {
         // then
         assertThat(result.getResponse().getContentAsString()).contains("ord_456");
 
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.FULL);
+        JsonNode event = logs.last();
+        assertThat(event.path("configuredMode").asString()).isEqualTo("FULL");
         // Body is kept as a JSON node so it serializes as a nested object, not an escaped string.
-        assertThat(event.getRequestBody()).isInstanceOf(JsonNode.class);
-        assertThat(event.getRequestBody().toString()).contains("\"password\":\"***\"");
-        assertThat(event.getRequestBody().toString()).contains("\"productId\":\"p_123\"");
-        assertThat(event.getRequestHeaders()).isNotNull();
-        Map<String, List<String>> requestHeaders = event.getRequestHeaders();
-        assertThat(extractByKey(requestHeaders, "Authorization")).contains("***");
-        assertThat(event.getResponseBody().toString()).contains("ord_456");
+        assertThat(event.path("requestBody").isObject()).isTrue();
+        assertThat(event.path("requestBody").toString()).contains("\"password\":\"***\"");
+        assertThat(event.path("requestBody").toString()).contains("\"productId\":\"p_123\"");
+        assertThat(event.path("requestHeaders").isObject()).isTrue();
+        assertThat(extractHeader(event.path("requestHeaders"), "Authorization").toString()).contains("***");
+        assertThat(event.path("responseBody").toString()).contains("ord_456");
     }
 
     @Test
@@ -166,8 +168,8 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getRequestBody().toString()).doesNotContain("hunter2");
+        JsonNode event = logs.last();
+        assertThat(event.path("requestBody").toString()).doesNotContain("hunter2");
     }
 
     @Test
@@ -183,8 +185,8 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.isRequestBodyTruncated()).isTrue();
+        JsonNode event = logs.last();
+        assertThat(event.path("requestBodyTruncated").asBoolean()).isTrue();
     }
 
     @Test
@@ -195,9 +197,9 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getPath()).isEqualTo("/api/orders/123");
-        assertThat(event.getQueryString()).isEqualTo("source=mobile");
+        JsonNode event = logs.last();
+        assertThat(event.path("path").asString()).isEqualTo("/api/orders/123");
+        assertThat(event.path("queryString").asString()).isEqualTo("source=mobile");
     }
 
     @Test
@@ -213,11 +215,11 @@ class HttpExchangeLoggingFilterIntegrationTest {
         }
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getExceptionClass()).isEqualTo(IllegalStateException.class.getName());
-        assertThat(event.getExceptionMessage()).isEqualTo("Cannot create order");
+        JsonNode event = logs.last();
+        assertThat(event.path("exceptionClass").asString()).isEqualTo(IllegalStateException.class.getName());
+        assertThat(event.path("exceptionMessage").asString()).isEqualTo("Cannot create order");
         // Status must reflect a server error, not the default 200 still on the response.
-        assertThat(event.getStatus()).isGreaterThanOrEqualTo(500);
+        assertThat(event.path("status").asInt()).isGreaterThanOrEqualTo(500);
     }
 
     @Test
@@ -231,9 +233,9 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(content().bytes(new byte[]{1, 2, 3}));
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getRequestBody()).asString().contains("not logged");
-        assertThat(event.getResponseBody()).asString().contains("not logged");
+        JsonNode event = logs.last();
+        assertThat(event.path("requestBody").asString()).contains("not logged");
+        assertThat(event.path("responseBody").asString()).contains("not logged");
     }
 
     @Test
@@ -246,9 +248,9 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getRequestBody()).isNotNull();
-        assertThat(event.getRequestBody().toString()).contains("p_1");
+        JsonNode event = logs.last();
+        assertThat(event.path("requestBody").isMissingNode()).isFalse();
+        assertThat(event.path("requestBody").toString()).contains("p_1");
     }
 
     @Test
@@ -274,8 +276,8 @@ class HttpExchangeLoggingFilterIntegrationTest {
 
         // then
         assertThat(result.getResponse().getHeader("X-Request-Id")).isEqualTo("external-id");
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getRequestId()).isEqualTo("external-id");
+        JsonNode event = logs.last();
+        assertThat(event.path("requestId").asString()).isEqualTo("external-id");
     }
 
     @Test
@@ -291,20 +293,20 @@ class HttpExchangeLoggingFilterIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk());
-        HttpExchangeLogEvent limitedEvent = sink.last();
+        JsonNode limitedEvent = logs.last();
 
-        sink.clear();
+        logs.clear();
         mockMvc().perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk());
-        HttpExchangeLogEvent fullEvent = sink.last();
+        JsonNode fullEvent = logs.last();
 
         // then
-        assertThat(limitedEvent.getConfiguredMode()).isEqualTo(HttpLogMode.LIMITED);
-        assertThat(limitedEvent.isRequestBodyTruncated()).isTrue();
-        assertThat(fullEvent.getConfiguredMode()).isEqualTo(HttpLogMode.FULL);
-        assertThat(fullEvent.isRequestBodyTruncated()).isFalse();
+        assertThat(limitedEvent.path("configuredMode").asString()).isEqualTo("LIMITED");
+        assertThat(limitedEvent.path("requestBodyTruncated").asBoolean()).isTrue();
+        assertThat(fullEvent.path("configuredMode").asString()).isEqualTo("FULL");
+        assertThat(fullEvent.path("requestBodyTruncated").asBoolean()).isFalse();
     }
 
     @Test
@@ -317,9 +319,9 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getRequestBody()).isNotNull();
-        String logged = event.getRequestBody().toString();
+        JsonNode event = logs.last();
+        assertThat(event.path("requestBody").isMissingNode()).isFalse();
+        String logged = event.path("requestBody").asString();
         assertThat(logged).contains("user=alice");
         assertThat(logged).contains("password=***");
         assertThat(logged).doesNotContain("hunter2");
@@ -338,24 +340,24 @@ class HttpExchangeLoggingFilterIntegrationTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getRequestBody()).isNotNull();
-        String logged = event.getRequestBody().toString();
+        JsonNode event = logs.last();
+        assertThat(event.path("requestBody").isMissingNode()).isFalse();
+        String logged = event.path("requestBody").asString();
         assertThat(logged).contains("<password>***</password>");
         assertThat(logged).contains("<productId>p_1</productId>");
         assertThat(logged).doesNotContain("secret");
     }
 
-    private List<String> extractByKey(Map<String, List<String>> headers, String key) {
+    private JsonNode extractHeader(JsonNode headers, String key) {
 
-        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+        for (Map.Entry<String, JsonNode> entry : headers.properties()) {
 
             if (entry.getKey().equalsIgnoreCase(key)) {
 
                 return entry.getValue();
             }
         }
-        return List.of();
+        return headers.path(key);
     }
 
     @SpringBootConfiguration
@@ -366,12 +368,6 @@ class HttpExchangeLoggingFilterIntegrationTest {
         TestController testController() {
 
             return new TestController();
-        }
-
-        @Bean(name = "httpExchangeLogSink")
-        RecordingHttpExchangeLogSink recordingSink() {
-
-            return new RecordingHttpExchangeLogSink();
         }
 
     }

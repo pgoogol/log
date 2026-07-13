@@ -7,19 +7,21 @@ import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.resolver.ExchangeSampler;
 import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
-import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
+import com.pgoogol.httpexchangelogger.support.BoundedBodyCaptureHttpServletResponse;
 import com.pgoogol.httpexchangelogger.support.CachedBodyHttpServletRequest;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
+import com.pgoogol.httpexchangelogger.tracing.HttpExchangeSpanEnricher;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -27,31 +29,42 @@ import java.util.Optional;
 
 public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
+    /**
+     * Every logged exchange goes to this SLF4J logger as a single JSON line. Routing (console,
+     * file, async, external systems) is the application's logging configuration concern —
+     * attach Logback/Log4j appenders to this logger instead of library-level switches.
+     */
+    public static final String LOGGER_NAME = "http.exchange.logger";
+
     private static final Logger LOG = LoggerFactory.getLogger(HttpExchangeLoggingFilter.class);
+    private static final Logger EXCHANGE_LOG = LoggerFactory.getLogger(LOGGER_NAME);
 
     private final HttpExchangeLoggerProperties properties;
     private final EndpointLoggingModeResolver modeResolver;
     private final HttpExchangeLogEventFactory eventFactory;
-    private final HttpExchangeLogSink sink;
+    private final HttpExchangeLogEventJsonWriter jsonWriter;
     private final RequestIdProvider requestIdProvider;
     private final ExchangeSampler sampler;
     private final RuntimeModeOverrideManager overrideManager;
+    private final HttpExchangeSpanEnricher spanEnricher;
 
     public HttpExchangeLoggingFilter(HttpExchangeLoggerProperties properties,
                                      EndpointLoggingModeResolver modeResolver,
                                      HttpExchangeLogEventFactory eventFactory,
-                                     HttpExchangeLogSink sink,
+                                     HttpExchangeLogEventJsonWriter jsonWriter,
                                      RequestIdProvider requestIdProvider,
                                      ExchangeSampler sampler,
-                                     RuntimeModeOverrideManager overrideManager) {
+                                     RuntimeModeOverrideManager overrideManager,
+                                     @Nullable HttpExchangeSpanEnricher spanEnricher) {
 
         this.properties = properties;
         this.modeResolver = modeResolver;
         this.eventFactory = eventFactory;
-        this.sink = sink;
+        this.jsonWriter = jsonWriter;
         this.requestIdProvider = requestIdProvider;
         this.sampler = sampler;
         this.overrideManager = overrideManager;
+        this.spanEnricher = spanEnricher;
     }
 
     private static int resolveCacheLimit(int maxBodyLength) {
@@ -102,7 +115,10 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         }
 
         int cacheLimit = resolveCacheLimit(properties.getMaxBodyLength());
-        ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
+        // The response streams through to the container; only the first cacheLimit bytes are
+        // retained for logging, so memory stays bounded no matter how large the response is.
+        BoundedBodyCaptureHttpServletResponse wrappedResponse =
+                new BoundedBodyCaptureHttpServletResponse(response, cacheLimit);
 
         // Eagerly buffer bounded textual bodies so they are logged even when the handler never
         // reads them. Everything else (form, multipart, binary, large or unknown-length bodies)
@@ -126,6 +142,9 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
             throw ex;
         } finally {
 
+            // Characters the handler wrote via getWriter() but never flushed still sit in the
+            // wrapper's writer; push them to the container before building the event.
+            wrappedResponse.flushCapturedWriter();
             long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
             try {
 
@@ -143,14 +162,23 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                         durationMs,
                         exception
                 );
-                sink.log(event);
+                emit(event);
             } catch (RuntimeException loggingException) {
 
                 LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
-            } finally {
-
-                copyBodyToResponse(wrappedResponse, exception);
             }
+        }
+    }
+
+    private void emit(HttpExchangeLogEvent event) {
+
+        if (Objects.nonNull(spanEnricher)) {
+
+            spanEnricher.enrich(event);
+        }
+        if (EXCHANGE_LOG.isInfoEnabled()) {
+
+            EXCHANGE_LOG.info(jsonWriter.write(event));
         }
     }
 
@@ -170,25 +198,6 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
         }
         long length = request.getContentLengthLong();
         return length > 0 && length <= cacheLimit;
-    }
-
-    private void copyBodyToResponse(ContentCachingResponseWrapper wrappedResponse, Throwable inFlight)
-            throws IOException {
-
-        try {
-
-            wrappedResponse.copyBodyToResponse();
-        } catch (IOException copyException) {
-
-            // Never let a copy failure mask the exception that is already propagating.
-            if (Objects.nonNull(inFlight)) {
-
-                inFlight.addSuppressed(copyException);
-            } else {
-
-                throw copyException;
-            }
-        }
     }
 
 }

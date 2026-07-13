@@ -7,6 +7,7 @@ import com.pgoogol.httpexchangelogger.sanitizer.BodySanitizer;
 import com.pgoogol.httpexchangelogger.sanitizer.HeaderSanitizer;
 import com.pgoogol.httpexchangelogger.support.BodyExtractor;
 import com.pgoogol.httpexchangelogger.support.BodyTruncator;
+import com.pgoogol.httpexchangelogger.support.BoundedBodyCaptureHttpServletResponse;
 import com.pgoogol.httpexchangelogger.support.ClientIpExtractor;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
 import com.pgoogol.httpexchangelogger.support.TraceContextProvider;
@@ -15,7 +16,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.web.util.ContentCachingResponseWrapper;
 import tools.jackson.databind.ObjectMapper;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -77,7 +77,7 @@ public class HttpExchangeLogEventFactory {
         return current;
     }
 
-    public HttpExchangeLogEvent create(HttpServletRequest request, byte[] requestBody, ContentCachingResponseWrapper response, HttpLogMode configuredMode, HttpLogMode effectiveMode, String requestId, long durationMs, Throwable exception) {
+    public HttpExchangeLogEvent create(HttpServletRequest request, byte[] requestBody, BoundedBodyCaptureHttpServletResponse response, HttpLogMode configuredMode, HttpLogMode effectiveMode, String requestId, long durationMs, Throwable exception) {
 
         HttpExchangeLogEvent.Builder builder = HttpExchangeLogEvent.builder().requestId(requestId).method(request.getMethod()).path(request.getRequestURI()).status(resolveStatus(response, exception)).durationMs(durationMs).configuredMode(configuredMode).effectiveMode(effectiveMode);
 
@@ -141,7 +141,7 @@ public class HttpExchangeLogEventFactory {
         return max;
     }
 
-    private int resolveStatus(ContentCachingResponseWrapper response, Throwable exception) {
+    private int resolveStatus(HttpServletResponse response, Throwable exception) {
 
         int status = response.getStatus();
         // When the handler threw, the container has not run its error handling yet,
@@ -171,7 +171,7 @@ public class HttpExchangeLogEventFactory {
             builder.requestBody(notLogged(contentType));
             return;
         }
-        BodyResult result = buildBody(body, contentType, cap);
+        BodyResult result = buildBody(body, contentType, cap, false);
         if (Objects.isNull(result)) {
 
             return;
@@ -276,10 +276,10 @@ public class HttpExchangeLogEventFactory {
         return ContentTypeMatcher.isBinary(contentType) || !ContentTypeMatcher.isLoggable(contentType);
     }
 
-    private void applyResponseBody(ContentCachingResponseWrapper response, HttpExchangeLogEvent.Builder builder, int cap) {
+    private void applyResponseBody(BoundedBodyCaptureHttpServletResponse response, HttpExchangeLogEvent.Builder builder, int cap) {
 
-        String body = BodyExtractor.toBodyString(response.getContentAsByteArray(), response.getCharacterEncoding());
-        BodyResult result = buildBody(body, response.getContentType(), cap);
+        String body = BodyExtractor.toBodyString(response.getCapturedBody(), response.getCharacterEncoding());
+        BodyResult result = buildBody(body, response.getContentType(), cap, response.isCaptureOverflowed());
         if (Objects.isNull(result)) {
 
             return;
@@ -288,7 +288,9 @@ public class HttpExchangeLogEventFactory {
         builder.responseBodyTruncated(result.truncated());
     }
 
-    private BodyResult buildBody(String body, String contentType, int cap) {
+    // captureIncomplete: the buffer held only a prefix of the payload, so the body must be
+    // reported as truncated and never parsed as a complete JSON document.
+    private BodyResult buildBody(String body, String contentType, int cap, boolean captureIncomplete) {
 
         if (!StringUtils.hasLength(body)) {
 
@@ -313,7 +315,7 @@ public class HttpExchangeLogEventFactory {
         String sanitized = bodySanitizer.sanitize(body, contentType);
 
         BodyTruncator.TruncationResult truncated = BodyTruncator.truncate(sanitized, cap);
-        if (truncated.truncated()) {
+        if (truncated.truncated() || captureIncomplete) {
 
             return new BodyResult(truncated.value(), true);
         }
