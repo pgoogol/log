@@ -7,16 +7,18 @@ import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.resolver.EndpointLoggingModeResolver;
 import com.pgoogol.httpexchangelogger.resolver.ExchangeSampler;
 import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
-import com.pgoogol.httpexchangelogger.sink.HttpExchangeLogSink;
+import com.pgoogol.httpexchangelogger.serialization.HttpExchangeLogEventJsonWriter;
 import com.pgoogol.httpexchangelogger.support.BoundedBodyCaptureHttpServletResponse;
 import com.pgoogol.httpexchangelogger.support.CachedBodyHttpServletRequest;
 import com.pgoogol.httpexchangelogger.support.ContentTypeMatcher;
 import com.pgoogol.httpexchangelogger.support.RequestIdProvider;
+import com.pgoogol.httpexchangelogger.tracing.HttpExchangeSpanEnricher;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,31 +29,42 @@ import java.util.Optional;
 
 public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
 
+    /**
+     * Every logged exchange goes to this SLF4J logger as a single JSON line. Routing (console,
+     * file, async, external systems) is the application's logging configuration concern —
+     * attach Logback/Log4j appenders to this logger instead of library-level switches.
+     */
+    public static final String LOGGER_NAME = "http.exchange.logger";
+
     private static final Logger LOG = LoggerFactory.getLogger(HttpExchangeLoggingFilter.class);
+    private static final Logger EXCHANGE_LOG = LoggerFactory.getLogger(LOGGER_NAME);
 
     private final HttpExchangeLoggerProperties properties;
     private final EndpointLoggingModeResolver modeResolver;
     private final HttpExchangeLogEventFactory eventFactory;
-    private final HttpExchangeLogSink sink;
+    private final HttpExchangeLogEventJsonWriter jsonWriter;
     private final RequestIdProvider requestIdProvider;
     private final ExchangeSampler sampler;
     private final RuntimeModeOverrideManager overrideManager;
+    private final HttpExchangeSpanEnricher spanEnricher;
 
     public HttpExchangeLoggingFilter(HttpExchangeLoggerProperties properties,
                                      EndpointLoggingModeResolver modeResolver,
                                      HttpExchangeLogEventFactory eventFactory,
-                                     HttpExchangeLogSink sink,
+                                     HttpExchangeLogEventJsonWriter jsonWriter,
                                      RequestIdProvider requestIdProvider,
                                      ExchangeSampler sampler,
-                                     RuntimeModeOverrideManager overrideManager) {
+                                     RuntimeModeOverrideManager overrideManager,
+                                     @Nullable HttpExchangeSpanEnricher spanEnricher) {
 
         this.properties = properties;
         this.modeResolver = modeResolver;
         this.eventFactory = eventFactory;
-        this.sink = sink;
+        this.jsonWriter = jsonWriter;
         this.requestIdProvider = requestIdProvider;
         this.sampler = sampler;
         this.overrideManager = overrideManager;
+        this.spanEnricher = spanEnricher;
     }
 
     private static int resolveCacheLimit(int maxBodyLength) {
@@ -149,11 +162,23 @@ public class HttpExchangeLoggingFilter extends OncePerRequestFilter {
                         durationMs,
                         exception
                 );
-                sink.log(event);
+                emit(event);
             } catch (RuntimeException loggingException) {
 
                 LOG.warn("Failed to build or emit HTTP exchange log event", loggingException);
             }
+        }
+    }
+
+    private void emit(HttpExchangeLogEvent event) {
+
+        if (Objects.nonNull(spanEnricher)) {
+
+            spanEnricher.enrich(event);
+        }
+        if (EXCHANGE_LOG.isInfoEnabled()) {
+
+            EXCHANGE_LOG.info(jsonWriter.write(event));
         }
     }
 

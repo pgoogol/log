@@ -4,7 +4,7 @@ Spring Boot starter, ktory automatycznie loguje requesty i response HTTP w aplik
 
 Sterowany konfiguracja, z trybami `OFF`, `BASIC`, `LIMITED`, `FULL`, regulami per endpoint, maskowaniem danych wrazliwych i limitem dlugosci body.
 
-Poza logowaniem do konsoli wspiera: file sink (JSON Lines), sampling, logowanie asynchroniczne, czasowe nadpisywanie trybu w runtime (admin endpoint actuatora, TTL) oraz korelacje z tracingiem (traceId/spanId, atrybuty OpenTelemetry).
+Kazdy exchange jest emitowany jako jedna linia JSON do loggera SLF4J `http.exchange.logger` — routing (konsola, plik, async, systemy zewnetrzne) konfiguruje sie w logging stacku aplikacji (Logback/Log4j), nie w bibliotece. Dodatkowo: sampling, czasowe nadpisywanie trybu w runtime (admin endpoint actuatora, TTL) oraz korelacje z tracingiem (traceId/spanId, atrybuty OpenTelemetry).
 
 Pelna referencja wszystkich opcji konfiguracyjnych (z wartosciami domyslnymi, tabela i gotowymi scenariuszami): [docs/configuration.md](docs/configuration.md).
 
@@ -49,18 +49,13 @@ http-exchange-logger:
 http-exchange-logger:
   enabled: true
   default-mode: BASIC
-  sink:
-    console: true
 
 logging:
   level:
     http.exchange.logger: INFO
 ```
 
-Aby logi pojawily sie w konsoli, musza byc spelnione dwa warunki:
-
-1. `http-exchange-logger.sink.console=true`
-2. logger `http.exchange.logger` ma poziom pozwalajacy wypisac log (np. `INFO`)
+Jedyny warunek widocznosci logow: logger `http.exchange.logger` musi miec poziom pozwalajacy wypisac log (np. `INFO`). Ustawienie poziomu `OFF` wycisza emisje bez wylaczania filtra (request-id i atrybuty spanow dzialaja dalej).
 
 ---
 
@@ -194,43 +189,47 @@ Przyklad:
 
 ---
 
-## Sinki
+## Wyjscie logu — sterowanie po stronie Springa
 
-Dzialaja dwa wbudowane sinki: console i file. Kazdy wlacza sie osobnym przelacznikiem:
+Biblioteka ma dokladnie jedno wyjscie: logger SLF4J `http.exchange.logger`, jedna linia JSON per exchange. Nie ma zadnych wlasnych "sinkow" ani przelacznikow wyjscia — routing, pliki, rotacja, asynchronicznosc i integracje to odpowiedzialnosc logging stacku aplikacji. Dzieki temu nie duplikujemy Logbacka i wszystkie jego mozliwosci (rotacja, kompresja, retencja, appenders zewnetrzne) sa dostepne od razu.
 
-```yaml
-http-exchange-logger:
-  sink:
-    console: true                        # SLF4J logger http.exchange.logger (domyslnie wlaczony)
-    file: true                           # JSON Lines do pliku
-    file-path: logs/http-exchange.log    # cel file sinka (domyslna wartosc)
+Metryki HTTP (timer per request) rowniez sa poza zakresem biblioteki — Spring Boot z Micrometerem dostarcza je out of the box jako `http.server.requests`.
+
+### Dedykowany plik (JSON Lines) przez Logback
+
+```xml
+<appender name="HTTP_EXCHANGE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/http-exchange.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+        <fileNamePattern>logs/http-exchange.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+        <maxFileSize>100MB</maxFileSize>
+        <maxHistory>7</maxHistory>
+    </rollingPolicy>
+    <encoder><pattern>%msg%n</pattern></encoder>
+</appender>
+
+<logger name="http.exchange.logger" level="INFO" additivity="false">
+    <appender-ref ref="HTTP_EXCHANGE"/>
+</logger>
 ```
 
-Metryki HTTP (timer per request) sa poza zakresem biblioteki — Spring Boot z Micrometerem dostarcza je out of the box jako `http.server.requests`; duplikowanie tego timera nie ma sensu.
+Pattern `%msg%n` zapisuje czysta linie JSON (bez prefiksu logbackowego) — plik jest wtedy poprawnym JSON Lines. `additivity="false"` wylacza dublowanie eventow do appenderow rodzica (np. konsoli).
 
-### File sink
+### Emisja asynchroniczna przez Logback
 
-Kazdy exchange to jedna linia JSON dopisywana do pliku (`sink.file-path`, katalogi tworzone automatycznie), niezaleznie od konfiguracji loggerow aplikacji. Sink nigdy nie psuje obslugi requestu: gdy pliku nie da sie otworzyc, degraduje sie do no-op (log ERROR przy starcie), a bledy zapisu sa zliczane i raportowane co jakis czas WARN-em.
-
-### Wlasne sinki
-
-Beany typu `HttpExchangeLogSink` sa automatycznie zbierane do kompozytu, wiec wlasny dodatkowy sink wystarczy zarejestrowac jako zwykly bean:
-
-```java
-@Bean
-public HttpExchangeLogSink slackSink() {
-    return event -> { /* wlasna logika */ };
-}
+```xml
+<appender name="ASYNC_HTTP_EXCHANGE" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>1024</queueSize>
+    <neverBlock>true</neverBlock>
+    <appender-ref ref="HTTP_EXCHANGE"/>
+</appender>
 ```
 
-Aby **zastapic** cala konfiguracje sinkow (wylaczajac wbudowane), zdefiniuj beana o nazwie `httpExchangeLogSink`:
+`neverBlock=true` odpowiada dawnemu zachowaniu biblioteki: watek requestu nigdy nie blokuje, nadmiarowe eventy sa odrzucane.
 
-```java
-@Bean(name = "httpExchangeLogSink")
-public HttpExchangeLogSink myCustomSink() {
-    return event -> { /* wlasna logika */ };
-}
-```
+### Inne cele (Kafka, Loki, ELK, Slack...)
+
+Uzyj odpowiedniego appendera (np. `logstash-logback-encoder`, appender Loki, appender Kafka) podpietego pod logger `http.exchange.logger` — biblioteka nie potrzebuje o tym wiedziec.
 
 ---
 
@@ -249,22 +248,6 @@ http-exchange-logger:
 ```
 
 Requesty odrzucone przez sampling przechodza bez opakowywania (zero kosztu buforowania) i nadal dostaja `X-Request-Id`. Aktywny runtime override (patrz nizej) pomija sampling - skoro ktos jawnie wlaczyl logowanie, eventy nie moga znikac.
-
----
-
-## Logowanie asynchroniczne
-
-Domyslnie eventy sa emitowane synchronicznie w watku requestu (po zakonczeniu obslugi). Dla sinkow o wyzszej latencji (np. file sink na wolnym dysku) mozna odsprzegnac emisje:
-
-```yaml
-http-exchange-logger:
-  async:
-    enabled: true
-    queue-capacity: 1000        # ograniczona kolejka
-    shutdown-timeout-ms: 2000   # ile czekac na oproznienie kolejki przy shutdownie
-```
-
-Watek requestu nigdy nie blokuje: gdy kolejka jest pelna, event jest odrzucany i zliczany (WARN co 100 odrzucen). Przy zamykaniu kontekstu kolejka jest oprozniana do sinkow w ramach `shutdown-timeout-ms`.
 
 ---
 
@@ -339,7 +322,6 @@ http-exchange-logger:
 
 Wszystkie domyslne beany sa zarejestrowane z `@ConditionalOnMissingBean`. Mozna nadpisac:
 
-- `HttpExchangeLogSink` (bean o nazwie `httpExchangeLogSink` zastepuje caly zestaw sinkow; inne beany tego typu sa dolaczane do kompozytu)
 - `BodySanitizer`
 - `HeaderSanitizer`
 - `RequestIdProvider`
@@ -349,13 +331,14 @@ Wszystkie domyslne beany sa zarejestrowane z `@ConditionalOnMissingBean`. Mozna 
 - `ExchangeSampler`
 - `RuntimeModeOverrideManager`
 - `HttpExchangeLogEventFactory`
-- `HttpExchangeLogEventJsonWriter`
+- `HttpExchangeLogEventJsonWriter` (format emitowanej linii JSON)
+- `HttpExchangeSpanEnricher` (wzbogacanie spanow tracingu; domyslna implementacja OTel)
 
 ---
 
 ## Zaleznosci opcjonalne
 
-Starter dziala bez dodatkowych zaleznosci (console/file sink, sampling, async, overridy programowe). Poszczegolne integracje aktywuja sie, gdy aplikacja ma na classpath:
+Starter dziala bez dodatkowych zaleznosci (emisja do SLF4J, sampling, overridy programowe). Poszczegolne integracje aktywuja sie, gdy aplikacja ma na classpath:
 
 | Funkcja | Wymagana zaleznosc |
 |---|---|

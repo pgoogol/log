@@ -1,10 +1,10 @@
 package com.pgoogol.httpexchangelogger.integration;
 
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
-import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -16,6 +16,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,11 +28,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class HttpExchangeLoggingFilterOverrideTest {
 
-    @Autowired
-    WebApplicationContext webApplicationContext;
+    private final HttpExchangeLogCapture logs = new HttpExchangeLogCapture();
 
     @Autowired
-    RecordingHttpExchangeLogSink sink;
+    WebApplicationContext webApplicationContext;
 
     @Autowired
     HttpExchangeLoggingFilter filter;
@@ -46,11 +46,17 @@ class HttpExchangeLoggingFilterOverrideTest {
                 .build();
     }
 
+    @BeforeEach
+    void attachCapture() {
+
+        logs.attach();
+    }
+
     @AfterEach
     void cleanUp() {
 
         overrideManager.clearAll();
-        sink.clear();
+        logs.detach();
     }
 
     @Test
@@ -66,10 +72,10 @@ class HttpExchangeLoggingFilterOverrideTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.BASIC);
-        assertThat(event.getEffectiveMode()).isEqualTo(HttpLogMode.FULL);
-        assertThat(event.getRequestBody()).isNotNull();
+        JsonNode event = logs.last();
+        assertThat(event.path("configuredMode").asString()).isEqualTo("BASIC");
+        assertThat(event.path("effectiveMode").asString()).isEqualTo("FULL");
+        assertThat(event.path("requestBody").isMissingNode()).isFalse();
     }
 
     @Test
@@ -85,7 +91,7 @@ class HttpExchangeLoggingFilterOverrideTest {
                 .andExpect(status().isOk());
 
         // then nothing is logged for it
-        assertThat(sink.getEvents()).isEmpty();
+        assertThat(logs.getEvents()).isEmpty();
 
         // when a non-matching endpoint is called
         mockMvc().perform(post("/api/products")
@@ -94,7 +100,7 @@ class HttpExchangeLoggingFilterOverrideTest {
                 .andExpect(status().isOk());
 
         // then the configured mode still applies there
-        assertThat(sink.getEvents()).hasSize(1);
+        assertThat(logs.getEvents()).hasSize(1);
     }
 
     @Test
@@ -109,10 +115,10 @@ class HttpExchangeLoggingFilterOverrideTest {
                 .andExpect(status().isOk());
 
         // then
-        HttpExchangeLogEvent event = sink.last();
-        assertThat(event.getConfiguredMode()).isEqualTo(HttpLogMode.BASIC);
-        assertThat(event.getEffectiveMode()).isEqualTo(HttpLogMode.BASIC);
-        assertThat(event.getRequestBody()).isNull();
+        JsonNode event = logs.last();
+        assertThat(event.path("configuredMode").asString()).isEqualTo("BASIC");
+        assertThat(event.path("effectiveMode").asString()).isEqualTo("BASIC");
+        assertThat(event.path("requestBody").isMissingNode()).isTrue();
     }
 
     @SpringBootConfiguration
@@ -123,12 +129,6 @@ class HttpExchangeLoggingFilterOverrideTest {
         TestController testController() {
 
             return new TestController();
-        }
-
-        @Bean(name = "httpExchangeLogSink")
-        RecordingHttpExchangeLogSink recordingSink() {
-
-            return new RecordingHttpExchangeLogSink();
         }
 
     }

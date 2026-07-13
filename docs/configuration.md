@@ -5,6 +5,10 @@ Wszystkie wlasciwosci startera znajduja sie pod prefixem `http-exchange-logger`
 domyslnymi i opisami, tabela referencyjna oraz gotowe konfiguracje dla
 typowych scenariuszy.
 
+Wyjscie logu jest jedno: logger SLF4J `http.exchange.logger` (jedna linia JSON
+per exchange). Routing — konsola, plik, async, systemy zewnetrzne — konfiguruje
+sie w logging stacku aplikacji (Logback/Log4j), nie w bibliotece.
+
 ---
 
 ## Pelny YAML (wszystkie opcje + wartosci domyslne)
@@ -34,15 +38,6 @@ http-exchange-logger:
   # Kolejnosc filtra servletowego. Domyslnie bardzo wysoki priorytet
   # (Ordered.HIGHEST_PRECEDENCE + 10), zeby objac pelny czas obslugi requestu.
   filter-order: -2147483638
-
-  # ---------- Sinki (miejsca docelowe eventow) ----------
-  sink:
-    # SLF4J logger "http.exchange.logger", poziom INFO, jedna linia JSON.
-    console: true
-    # JSON Lines dopisywane do pliku; przy bledzie degraduje sie do no-op.
-    file: false
-    # Sciezka file sinka; katalogi nadrzedne tworzone automatycznie przy starcie.
-    file-path: logs/http-exchange.log
 
   # ---------- Zakres danych w evencie ----------
   include:
@@ -78,16 +73,6 @@ http-exchange-logger:
     # i nadal dostaja X-Request-Id. Runtime override pomija sampling.
     rate: 1.0
 
-  # ---------- Emisja asynchroniczna ----------
-  async:
-    # true = eventy trafiaja do sinkow przez osobny watek i ograniczona kolejke.
-    enabled: false
-    # Pojemnosc kolejki; gdy pelna, event jest ODRZUCANY (watek requestu nigdy
-    # nie blokuje), odrzucenia zliczane (WARN co 100).
-    queue-capacity: 1000
-    # Ile ms shutdown czeka na oproznienie kolejki do sinkow.
-    shutdown-timeout-ms: 2000
-
   # ---------- Tracing ----------
   tracing:
     # Gdy opentelemetry-api jest na classpath: dopisuj do biezacego spana atrybuty
@@ -106,10 +91,11 @@ http-exchange-logger:
       mode: OFF
 ```
 
-Konfiguracja **poza** prefixem biblioteki, potrzebna w dwoch przypadkach:
+Konfiguracja **poza** prefixem biblioteki:
 
 ```yaml
-# 1. Warunek konieczny dla console sinka — logger musi przepuszczac INFO:
+# 1. Warunek widocznosci logow — logger musi przepuszczac INFO
+#    (poziom OFF wycisza emisje bez wylaczania filtra):
 logging:
   level:
     http.exchange.logger: INFO
@@ -124,6 +110,38 @@ management:
 
 ---
 
+## Wyjscie logu — konfiguracja w Logbacku
+
+Plik JSON Lines z rotacja, bez dublowania do konsoli:
+
+```xml
+<appender name="HTTP_EXCHANGE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/http-exchange.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+        <fileNamePattern>logs/http-exchange.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+        <maxFileSize>100MB</maxFileSize>
+        <maxHistory>7</maxHistory>
+    </rollingPolicy>
+    <encoder><pattern>%msg%n</pattern></encoder>
+</appender>
+
+<logger name="http.exchange.logger" level="INFO" additivity="false">
+    <appender-ref ref="HTTP_EXCHANGE"/>
+</logger>
+```
+
+Emisja asynchroniczna (watek requestu nigdy nie blokuje):
+
+```xml
+<appender name="ASYNC_HTTP_EXCHANGE" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>1024</queueSize>
+    <neverBlock>true</neverBlock>
+    <appender-ref ref="HTTP_EXCHANGE"/>
+</appender>
+```
+
+---
+
 ## Tabela referencyjna
 
 | Wlasciwosc | Typ | Domyslnie | Opis |
@@ -134,18 +152,12 @@ management:
 | `max-body-length` | int | `10000` | Absolutny limit znakow body (0 = bez body) |
 | `limited-max-body-length` | int | `2000` | Limit body w trybie LIMITED (przycinany do `max-body-length`) |
 | `filter-order` | int | `HIGHEST_PRECEDENCE + 10` | Kolejnosc filtra servletowego |
-| `sink.console` | boolean | `true` | Sink SLF4J (`http.exchange.logger`) |
-| `sink.file` | boolean | `false` | Sink plikowy JSON Lines |
-| `sink.file-path` | String | `logs/http-exchange.log` | Plik docelowy file sinka |
 | `include.headers` | boolean | `true` | Czy logowac naglowki |
 | `include.query-string` | boolean | `true` | Czy logowac query string |
 | `include.client-ip` | boolean | `true` | Czy logowac IP klienta |
 | `mask.enabled` | boolean | `true` | Maskowanie pol z listy `fields` |
 | `mask.fields` | List | 8 pol (patrz wyzej) | Maskowane pola; wlasna lista zastepuje domyslna |
 | `sampling.rate` | double | `1.0` | Globalny wspolczynnik samplingu (0.0–1.0) |
-| `async.enabled` | boolean | `false` | Asynchroniczna emisja eventow |
-| `async.queue-capacity` | int | `1000` | Pojemnosc ograniczonej kolejki |
-| `async.shutdown-timeout-ms` | long | `2000` | Czas na oproznienie kolejki przy shutdownie |
 | `tracing.otel-span-attributes` | boolean | `true` | Atrybuty `http_exchange.*` na spanach OTel |
 | `endpoints[].pattern` | String | — | Wzorzec sciezki (Ant-style) |
 | `endpoints[].mode` | enum | — | Tryb dla wzorca |
@@ -178,8 +190,6 @@ Metryki HTTP (timer per request) zapewnia sam Spring Boot z Micrometerem
 http-exchange-logger:
   default-mode: BASIC
   require-ttl-for-full-logging: true    # FULL z override'u zawsze wygasnie
-  sink:
-    console: true
   endpoints:
     - pattern: /actuator/**
       mode: OFF
@@ -193,20 +203,13 @@ management:
         include: health,httpexchangelogger   # dostep ograniczyc do roli ADMIN / sieci wewnetrznej
 ```
 
-### Duzy ruch — sampling + async + file sink
+### Duzy ruch — sampling + async + dedykowany plik
 
 ```yaml
 http-exchange-logger:
   default-mode: LIMITED
   sampling:
     rate: 0.1                     # ~10% ruchu
-  async:
-    enabled: true
-    queue-capacity: 5000
-  sink:
-    console: false
-    file: true
-    file-path: /var/log/app/http-exchange.log
   endpoints:
     - pattern: /api/payments/**
       mode: FULL
@@ -214,6 +217,9 @@ http-exchange-logger:
     - pattern: /api/health/**
       mode: OFF
 ```
+
+Plus w Logbacku: `RollingFileAppender` + `AsyncAppender` podpiete pod logger
+`http.exchange.logger` (snippety wyzej).
 
 ### Debugowanie jednego endpointu bez restartu
 
@@ -245,9 +251,10 @@ http-exchange-logger:
 1. **`mask.fields` zastepuje liste domyslna** — podajac wlasna liste trzeba
    przekopiowac pola domyslne i dopisac wlasne, inaczej np. `password`
    przestanie byc maskowane w body.
-2. **Console sink wymaga dwoch warunkow naraz**: `sink.console: true` **i**
-   poziom `INFO` (lub nizszy) dla loggera `http.exchange.logger`. Brak
-   ktoregokolwiek = brak logow w konsoli.
+2. **Widocznosc logow steruje logger, nie biblioteka** — poziom loggera
+   `http.exchange.logger` ponizej `INFO` (np. `WARN`/`OFF`) wycisza emisje,
+   mimo ze filtr dziala. To zamierzone: wlaczanie/wylaczanie wyjscia odbywa
+   sie w konfiguracji logowania Springa.
 3. **`max-body-length` jest sufitem absolutnym** — ustawienie
    `limited-max-body-length` powyzej `max-body-length` nie zwiekszy limitu
    dla LIMITED.
@@ -256,3 +263,5 @@ http-exchange-logger:
 5. **Runtime overridy sa per instancja** — w srodowisku wieloinstancyjnym
    override ustawiony przez admin endpoint dziala tylko na instancji,
    ktora obsluzyla wywolanie.
+6. **Logowanie do pliku: pamietaj o `additivity="false"`** — bez tego eventy
+   poleca i do pliku, i do appenderow rodzica (np. konsoli).

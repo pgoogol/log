@@ -23,8 +23,6 @@ class HttpExchangeLoggerPropertiesTest {
             assertThat(props.getMaxBodyLength()).isEqualTo(10_000);
             assertThat(props.getLimitedMaxBodyLength()).isEqualTo(2_000);
             assertThat(props.isRequireTtlForFullLogging()).isFalse();
-            assertThat(props.getSink().isConsole()).isTrue();
-            assertThat(props.getSink().isFile()).isFalse();
             assertThat(props.getInclude().isHeaders()).isTrue();
             assertThat(props.getInclude().isQueryString()).isTrue();
             assertThat(props.getInclude().isClientIp()).isTrue();
@@ -45,8 +43,6 @@ class HttpExchangeLoggerPropertiesTest {
                 "http-exchange-logger.require-ttl-for-full-logging=true",
                 "http-exchange-logger.max-body-length=512",
                 "http-exchange-logger.limited-max-body-length=64",
-                "http-exchange-logger.sink.console=false",
-                "http-exchange-logger.sink.file=true",
                 "http-exchange-logger.include.headers=false",
                 "http-exchange-logger.include.query-string=false",
                 "http-exchange-logger.include.client-ip=false",
@@ -64,8 +60,6 @@ class HttpExchangeLoggerPropertiesTest {
             assertThat(props.isRequireTtlForFullLogging()).isTrue();
             assertThat(props.getMaxBodyLength()).isEqualTo(512);
             assertThat(props.getLimitedMaxBodyLength()).isEqualTo(64);
-            assertThat(props.getSink().isConsole()).isFalse();
-            assertThat(props.getSink().isFile()).isTrue();
             assertThat(props.getInclude().isHeaders()).isFalse();
             assertThat(props.getInclude().isQueryString()).isFalse();
             assertThat(props.getInclude().isClientIp()).isFalse();

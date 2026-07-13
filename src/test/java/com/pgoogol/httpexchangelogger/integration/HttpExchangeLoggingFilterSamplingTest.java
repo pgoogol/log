@@ -4,6 +4,7 @@ import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
 import com.pgoogol.httpexchangelogger.runtime.RuntimeModeOverrideManager;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -28,11 +29,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class HttpExchangeLoggingFilterSamplingTest {
 
-    @Autowired
-    WebApplicationContext webApplicationContext;
+    private final HttpExchangeLogCapture logs = new HttpExchangeLogCapture();
 
     @Autowired
-    RecordingHttpExchangeLogSink sink;
+    WebApplicationContext webApplicationContext;
 
     @Autowired
     HttpExchangeLoggingFilter filter;
@@ -47,11 +47,17 @@ class HttpExchangeLoggingFilterSamplingTest {
                 .build();
     }
 
+    @BeforeEach
+    void attachCapture() {
+
+        logs.attach();
+    }
+
     @AfterEach
     void cleanUp() {
 
         overrideManager.clearAll();
-        sink.clear();
+        logs.detach();
     }
 
     @Test
@@ -65,7 +71,7 @@ class HttpExchangeLoggingFilterSamplingTest {
                 .andReturn();
 
         // then the request went through untouched, the request id is still issued, but nothing is logged
-        assertThat(sink.getEvents()).isEmpty();
+        assertThat(logs.getEvents()).isEmpty();
         assertThat(result.getResponse().getHeader("X-Request-Id")).isNotBlank();
         assertThat(result.getResponse().getContentAsString()).contains("ord_456");
     }
@@ -83,8 +89,8 @@ class HttpExchangeLoggingFilterSamplingTest {
                 .andExpect(status().isOk());
 
         // then the exchange is logged despite the zero sampling rate
-        assertThat(sink.getEvents()).hasSize(1);
-        assertThat(sink.last().getEffectiveMode()).isEqualTo(HttpLogMode.FULL);
+        assertThat(logs.getEvents()).hasSize(1);
+        assertThat(logs.last().path("effectiveMode").asString()).isEqualTo("FULL");
     }
 
     @SpringBootConfiguration
@@ -95,12 +101,6 @@ class HttpExchangeLoggingFilterSamplingTest {
         TestController testController() {
 
             return new TestController();
-        }
-
-        @Bean(name = "httpExchangeLogSink")
-        RecordingHttpExchangeLogSink recordingSink() {
-
-            return new RecordingHttpExchangeLogSink();
         }
 
     }

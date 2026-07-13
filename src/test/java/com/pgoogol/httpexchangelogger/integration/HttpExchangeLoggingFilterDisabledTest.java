@@ -1,6 +1,8 @@
 package com.pgoogol.httpexchangelogger.integration;
 
 import com.pgoogol.httpexchangelogger.filter.HttpExchangeLoggingFilter;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -25,11 +27,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class HttpExchangeLoggingFilterDisabledTest {
 
-    @Autowired
-    WebApplicationContext webApplicationContext;
+    private final HttpExchangeLogCapture logs = new HttpExchangeLogCapture();
 
     @Autowired
-    RecordingHttpExchangeLogSink sink;
+    WebApplicationContext webApplicationContext;
 
     @Autowired
     HttpExchangeLoggingFilter filter;
@@ -39,6 +40,18 @@ class HttpExchangeLoggingFilterDisabledTest {
         return MockMvcBuilders.webAppContextSetup(webApplicationContext)
                 .addFilters(filter)
                 .build();
+    }
+
+    @BeforeEach
+    void attachCapture() {
+
+        logs.attach();
+    }
+
+    @AfterEach
+    void detachCapture() {
+
+        logs.detach();
     }
 
     @Test
@@ -52,7 +65,7 @@ class HttpExchangeLoggingFilterDisabledTest {
                 .andReturn();
 
         // then
-        assertThat(sink.getEvents()).isEmpty();
+        assertThat(logs.getEvents()).isEmpty();
         assertThat(result.getResponse().getHeader("X-Request-Id")).isNull();
     }
 
@@ -64,12 +77,6 @@ class HttpExchangeLoggingFilterDisabledTest {
         TestController testController() {
 
             return new TestController();
-        }
-
-        @Bean(name = "httpExchangeLogSink")
-        RecordingHttpExchangeLogSink recordingSink() {
-
-            return new RecordingHttpExchangeLogSink();
         }
 
     }

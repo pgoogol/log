@@ -1,4 +1,4 @@
-package com.pgoogol.httpexchangelogger.sink;
+package com.pgoogol.httpexchangelogger.tracing;
 
 import com.pgoogol.httpexchangelogger.model.HttpExchangeLogEvent;
 import com.pgoogol.httpexchangelogger.model.HttpLogMode;
@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
-class OpenTelemetrySpanAttributesSinkTest {
+class OpenTelemetrySpanAttributesEnricherTest {
 
     @Mock
     Span span;
@@ -39,15 +39,15 @@ class OpenTelemetrySpanAttributesSinkTest {
     }
 
     @Test
-    void log_whenCurrentSpanValid_setsExchangeAttributes() {
+    void enrich_whenCurrentSpanValid_setsExchangeAttributes() {
 
         // given
         when(span.getSpanContext()).thenReturn(spanContext);
         when(spanContext.isValid()).thenReturn(true);
-        OpenTelemetrySpanAttributesSink sink = new OpenTelemetrySpanAttributesSink(() -> span);
+        OpenTelemetrySpanAttributesEnricher enricher = new OpenTelemetrySpanAttributesEnricher(() -> span);
 
         // when
-        sink.log(eventBuilder().build());
+        enricher.enrich(eventBuilder().build());
 
         // then
         verify(span).setAttribute("http.request.method", "POST");
@@ -59,15 +59,15 @@ class OpenTelemetrySpanAttributesSinkTest {
     }
 
     @Test
-    void log_whenExceptionPresent_setsExceptionAttributes() {
+    void enrich_whenExceptionPresent_setsExceptionAttributes() {
 
         // given
         when(span.getSpanContext()).thenReturn(spanContext);
         when(spanContext.isValid()).thenReturn(true);
-        OpenTelemetrySpanAttributesSink sink = new OpenTelemetrySpanAttributesSink(() -> span);
+        OpenTelemetrySpanAttributesEnricher enricher = new OpenTelemetrySpanAttributesEnricher(() -> span);
 
         // when
-        sink.log(eventBuilder()
+        enricher.enrich(eventBuilder()
                 .status(500)
                 .exceptionClass("com.example.OrderException")
                 .exceptionMessage("boom")
@@ -79,15 +79,15 @@ class OpenTelemetrySpanAttributesSinkTest {
     }
 
     @Test
-    void log_whenCurrentSpanInvalid_setsNothing() {
+    void enrich_whenCurrentSpanInvalid_setsNothing() {
 
         // given
         when(span.getSpanContext()).thenReturn(spanContext);
         when(spanContext.isValid()).thenReturn(false);
-        OpenTelemetrySpanAttributesSink sink = new OpenTelemetrySpanAttributesSink(() -> span);
+        OpenTelemetrySpanAttributesEnricher enricher = new OpenTelemetrySpanAttributesEnricher(() -> span);
 
         // when
-        sink.log(eventBuilder().build());
+        enricher.enrich(eventBuilder().build());
 
         // then
         verify(span, never()).setAttribute(anyString(), anyString());
@@ -95,13 +95,13 @@ class OpenTelemetrySpanAttributesSinkTest {
     }
 
     @Test
-    void log_whenUsingRealNoopCurrentSpan_doesNotThrow() {
+    void enrich_whenUsingRealNoopCurrentSpan_doesNotThrow() {
 
         // given the default supplier resolves Span.current() which is a no-op span in tests
-        OpenTelemetrySpanAttributesSink sink = new OpenTelemetrySpanAttributesSink();
+        OpenTelemetrySpanAttributesEnricher enricher = new OpenTelemetrySpanAttributesEnricher();
 
         // when
-        Throwable thrown = catchThrowable(() -> sink.log(eventBuilder().build()));
+        Throwable thrown = catchThrowable(() -> enricher.enrich(eventBuilder().build()));
 
         // then
         assertThat(thrown).isNull();

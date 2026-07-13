@@ -28,15 +28,11 @@ public class HttpExchangeLoggerProperties {
      */
     private int filterOrder = Ordered.HIGHEST_PRECEDENCE + 10;
 
-    private Sink sink = new Sink();
-
     private Include include = new Include();
 
     private Mask mask = new Mask();
 
     private Sampling sampling = new Sampling();
-
-    private Async async = new Async();
 
     private Tracing tracing = new Tracing();
 
@@ -102,16 +98,6 @@ public class HttpExchangeLoggerProperties {
         this.filterOrder = filterOrder;
     }
 
-    public Sink getSink() {
-
-        return sink;
-    }
-
-    public void setSink(Sink sink) {
-
-        this.sink = sink;
-    }
-
     public Include getInclude() {
 
         return include;
@@ -142,16 +128,6 @@ public class HttpExchangeLoggerProperties {
         this.sampling = sampling;
     }
 
-    public Async getAsync() {
-
-        return async;
-    }
-
-    public void setAsync(Async async) {
-
-        this.async = async;
-    }
-
     public Tracing getTracing() {
 
         return tracing;
@@ -170,48 +146,6 @@ public class HttpExchangeLoggerProperties {
     public void setEndpoints(List<Endpoint> endpoints) {
 
         this.endpoints = endpoints;
-    }
-
-    public static class Sink {
-
-        private boolean console = true;
-        private boolean file = false;
-
-        /**
-         * Target file for the file sink; parent directories are created on startup.
-         */
-        private String filePath = "logs/http-exchange.log";
-
-        public boolean isConsole() {
-
-            return console;
-        }
-
-        public void setConsole(boolean console) {
-
-            this.console = console;
-        }
-
-        public boolean isFile() {
-
-            return file;
-        }
-
-        public void setFile(boolean file) {
-
-            this.file = file;
-        }
-
-        public String getFilePath() {
-
-            return filePath;
-        }
-
-        public void setFilePath(String filePath) {
-
-            this.filePath = filePath;
-        }
-
     }
 
     public static class Include {
@@ -304,53 +238,6 @@ public class HttpExchangeLoggerProperties {
         public void setRate(double rate) {
 
             this.rate = rate;
-        }
-
-    }
-
-    public static class Async {
-
-        private boolean enabled = false;
-
-        /**
-         * Bounded queue between request threads and the sink worker; when full,
-         * events are dropped (never blocking the request).
-         */
-        private int queueCapacity = 1_000;
-
-        /**
-         * How long shutdown waits for queued events to be flushed to the sinks.
-         */
-        private long shutdownTimeoutMs = 2_000;
-
-        public boolean isEnabled() {
-
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-
-            this.enabled = enabled;
-        }
-
-        public int getQueueCapacity() {
-
-            return queueCapacity;
-        }
-
-        public void setQueueCapacity(int queueCapacity) {
-
-            this.queueCapacity = queueCapacity;
-        }
-
-        public long getShutdownTimeoutMs() {
-
-            return shutdownTimeoutMs;
-        }
-
-        public void setShutdownTimeoutMs(long shutdownTimeoutMs) {
-
-            this.shutdownTimeoutMs = shutdownTimeoutMs;
         }
 
     }
